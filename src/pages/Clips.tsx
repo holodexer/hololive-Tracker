@@ -9,7 +9,7 @@ import { useQuery } from "@tanstack/react-query";
 import { LoadTransition } from "@/components/LoadTransition";
 import { StaggerList } from "@/components/StaggerList";
 
-const PAGE_SIZE = 50;
+const PAGE_SIZE = 48;
 
 const Clips = () => {
   const { t, clipLanguages, hidePrivateVideos, locale } = useSettings();

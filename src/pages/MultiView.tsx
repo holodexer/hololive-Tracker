@@ -37,16 +37,8 @@ export default function MultiView() {
   const handleAddStream = (channelId: string) => {
     const stream = liveChannelMap.get(channelId);
     if (stream && !selectedIds.includes(stream.id)) {
-      toggle(stream.id, {
-        channelId: stream.channel.id,
-        channelName: stream.channel.name,
-        viewers: stream.live_viewers,
-      });
+      toggle(stream.id);
     }
-  };
-
-  const handleRemoveStream = (videoId: string) => {
-    toggle(videoId);
   };
 
   const handleToggleMuteAll = () => {
@@ -170,7 +162,7 @@ export default function MultiView() {
               className="relative rounded-lg overflow-hidden bg-card border border-border"
             >
               <button
-                onClick={() => handleRemoveStream(videoId)}
+                onClick={() => toggle(videoId)}
                 className="absolute top-2 right-2 z-10 p-1 rounded-full bg-background/70 backdrop-blur-sm text-muted-foreground hover:text-destructive transition-colors"
               >
                 <X className="w-4 h-4" />

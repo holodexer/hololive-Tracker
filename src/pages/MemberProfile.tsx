@@ -16,7 +16,7 @@ import { Loader2, Heart, ExternalLink } from "lucide-react";
 import { getDisplayName, getChannelPhotoUrl } from "@/lib/utils";
 import { TAB_PANEL_TRANSITION_CLASS } from "@/lib/transitions";
 
-const PAGE_SIZE = 50;
+const PAGE_SIZE = 48;
 
 const MemberProfile = () => {
   const { channelId } = useParams<{ channelId: string }>();

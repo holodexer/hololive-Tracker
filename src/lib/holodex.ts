@@ -37,7 +37,7 @@ export interface HolodexVideo {
 }
 
 export async function fetchHololiveLive(): Promise<HolodexVideo[]> {
-  const res = await fetch(`${BASE_URL}/live?org=Hololive&limit=50`, {
+  const res = await fetch(`${BASE_URL}/live?org=Hololive&limit=48`, {
     headers: { "X-APIKEY": API_KEY },
   });
   if (!res.ok) throw new Error(`Holodex API error: ${res.status}`);
@@ -82,7 +82,7 @@ export async function fetchChannelVideos(
   channelId: string,
   type: "stream" | "clip" = "stream",
   status: "past" | "live" | "upcoming" = "past",
-  limit = 50,
+  limit = 48,
   offset = 0
 ): Promise<HolodexVideo[]> {
   const params = new URLSearchParams({
@@ -111,7 +111,7 @@ export async function fetchChannelLiveAndUpcoming(channelId: string): Promise<Ho
 
 export async function fetchChannelClips(
   channelId: string,
-  limit = 50,
+  limit = 48,
   offset = 0,
   lang = "en"
 ): Promise<HolodexVideo[]> {
@@ -128,7 +128,7 @@ export async function fetchChannelClips(
 }
 
 export async function fetchHololiveClips(
-  limit = 50,
+  limit = 48,
   offset = 0,
   lang = "en"
 ): Promise<HolodexVideo[]> {
@@ -149,7 +149,7 @@ export async function fetchHololiveClips(
 }
 
 export async function fetchHololivePastStreams(
-  limit = 50,
+  limit = 48,
   offset = 0
 ): Promise<HolodexVideo[]> {
   const params = new URLSearchParams({

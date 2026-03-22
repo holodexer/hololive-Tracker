@@ -86,6 +86,7 @@ export default function SyncWatch() {
   const [countdown, setCountdown] = useState<{ videoId: string; title?: string } | null>(null);
   const [mobileSection, setMobileSection] = useState<"sidebar" | "collapsed">("sidebar");
   const [showClips, setShowClips] = useState(false);
+  const [clipsActiveTab, setClipsActiveTab] = useState<"live" | "archives" | "clips">("live");
 
   const playerRef = useRef<any>(null);
   const directVideoRef = useRef<HTMLVideoElement | null>(null);
@@ -723,14 +724,25 @@ export default function SyncWatch() {
         open={showClips}
         onClose={() => setShowClips(false)}
         onSelectClip={handleSelectClip}
+        onTabChange={setClipsActiveTab}
+        activeTab={clipsActiveTab}
         locale={locale}
         labels={{
           clipsTitle: t.sync.clipsTitle,
+          clipsTab: t.favorites.clips,
+          archivesTab: t.favorites.archives,
+          favoriteOnly: t.sync.favoriteOnly,
           selectClipToAdd: t.sync.selectClipToAdd,
+          selectLiveToAdd: t.sync.selectLiveToAdd,
+          selectArchiveToAdd: t.sync.selectArchiveToAdd,
           noClipsFound: t.sync.noClipsFound,
+          noArchivesFound: t.sync.noArchivesFound,
           clipsLoading: t.sync.clipsLoading,
+          archivesLoading: t.sync.archivesLoading,
           loadMore: t.common.loadMore,
           loading: t.common.loading,
+          liveNow: t.sync.liveNow,
+          noLive: t.sync.noLive,
         }}
       />
 

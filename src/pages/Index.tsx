@@ -12,7 +12,7 @@ import { useQuery } from "@tanstack/react-query";
 import { format } from "date-fns";
 import { TAB_PANEL_TRANSITION_CLASS } from "@/lib/transitions";
 
-const PAGE_SIZE = 50;
+const PAGE_SIZE = 48;
 
 const Index = () => {
   const { data, isLoading, error } = useHolodexStreams();

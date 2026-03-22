@@ -13,7 +13,7 @@ import { format } from "date-fns";
 import { addDays, isAfter, isBefore } from "date-fns";
 import { TAB_PANEL_TRANSITION_CLASS } from "@/lib/transitions";
 
-const PAGE_SIZE = 50;
+const PAGE_SIZE = 48;
 
 export default function Favorites() {
   const { favorites, clipLanguages, hidePrivateVideos, locale, t } = useSettings();
