@@ -94,6 +94,12 @@ export function useSyncWatch({ roomId, nickname, avatar, isHost }: UseSyncWatchO
   // Derive host deterministically from presence: oldest member
   const computedHostId = useMemo(() => {
     if (rawPeers.length === 0) return hostId;
+
+    // Keep current host sticky while they are still present.
+    if (hostId && rawPeers.some((peer) => peer.odataId === hostId)) {
+      return hostId;
+    }
+
     const sorted = [...rawPeers].sort((a, b) => a.joinedAt - b.joinedAt);
     return sorted[0].odataId;
   }, [rawPeers, hostId]);

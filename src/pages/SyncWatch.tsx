@@ -72,7 +72,7 @@ export default function SyncWatch() {
   const initialRoomCandidate = useRef(roomParam ?? savedSession?.roomId ?? null).current;
 
   const initialRoom = initialRoomCandidate;
-  // Don't restore host from session — it's calculated dynamically from presence
+  // Re-entering an existing room should not reclaim host automatically.
   const initialHost = roomParam ? false : !savedSession;
 
   const [roomId, setRoomId] = useState<string | null>(initialRoom);
