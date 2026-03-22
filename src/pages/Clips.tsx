@@ -8,6 +8,7 @@ import { Loader2 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { LoadTransition } from "@/components/LoadTransition";
 import { StaggerList } from "@/components/StaggerList";
+import { PageHeader } from "@/components/PageHeader";
 
 const PAGE_SIZE = 48;
 
@@ -74,12 +75,16 @@ const Clips = () => {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-bold text-foreground">{t.clips.title}</h1>
+      <PageHeader
+        title={t.clips.title}
+        badge={`${clips.length}`}
+        description={clips.length === 0 ? t.clips.noClips : undefined}
+      />
       {(clips?.length ?? 0) === 0 ? (
         <p className="text-muted-foreground">{t.clips.noClips}</p>
       ) : (
         <>
-          <StaggerList className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+          <StaggerList className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {clips!.map((s) => (
               <StreamCard key={s.id} stream={s} />
             ))}

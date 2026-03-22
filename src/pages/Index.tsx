@@ -185,7 +185,7 @@ const Index = () => {
             {sortedLive.length === 0 ? (
               <p className="text-muted-foreground">{t.favorites.noLive}</p>
             ) : (
-              <StaggerList className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+              <StaggerList className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                 {sortedLive.map((s) => (
                   <StreamCard key={s.id} stream={s} />
                 ))}
@@ -258,7 +258,7 @@ const Index = () => {
             <p className="text-muted-foreground">{t.favorites.noArchives}</p>
           ) : (
             <>
-              <StaggerList className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+              <StaggerList className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                 {archiveVideos.map((s) => (
                   <StreamCard key={s.id} stream={s} />
                 ))}
@@ -295,7 +295,7 @@ const Index = () => {
             <p className="text-muted-foreground">{t.favorites.noClips}</p>
           ) : (
             <>
-              <StaggerList className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+              <StaggerList className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                 {clipVideos.map((s) => (
                   <StreamCard key={s.id} stream={s} />
                 ))}

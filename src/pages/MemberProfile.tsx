@@ -241,7 +241,7 @@ const MemberProfile = () => {
               </span>
             )}
           </h2>
-          <StaggerList className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+          <StaggerList className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {[...live, ...upcoming].map((s) => (
               <StreamCard key={s.id} stream={s} />
             ))}
@@ -275,7 +275,7 @@ const MemberProfile = () => {
               <p className="text-muted-foreground">{t.profile.noStreams}</p>
             ) : (
               <>
-                <StaggerList className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                <StaggerList className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                   {pastVideos.map((s) => (
                     <StreamCard key={s.id} stream={s} />
                   ))}
@@ -306,7 +306,7 @@ const MemberProfile = () => {
               <p className="text-muted-foreground">{t.profile.noClips}</p>
             ) : (
               <>
-                <StaggerList className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                <StaggerList className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                   {clipVideos.map((s) => (
                     <StreamCard key={s.id} stream={s} />
                   ))}

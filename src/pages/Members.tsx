@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { getDisplayName, getChannelPhotoUrl } from "@/lib/utils";
 import { LoadTransition } from "@/components/LoadTransition";
 import { StaggerList } from "@/components/StaggerList";
+import { PageHeader } from "@/components/PageHeader";
 
 const Members = () => {
   const { data: channels, isLoading } = useHololiveChannels();
@@ -53,7 +54,11 @@ const Members = () => {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-bold text-foreground">{t.members.title}</h1>
+      <PageHeader
+        title={t.members.title}
+        badge={`${vtubers.length}`}
+        description={favoriteChannels.length > 0 ? `${favoriteChannels.length} ${t.members.favorites}` : undefined}
+      />
 
       {/* Search & Filter */}
       <div className="flex flex-col sm:flex-row gap-3">

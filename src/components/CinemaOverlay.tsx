@@ -1,25 +1,54 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { X, MessageSquare } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { useSettings } from "@/contexts/SettingsContext";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { cn } from "@/lib/utils";
 
+const CINEMA_CHAT_PREF_KEY = "cinema-overlay-show-chat";
+
 interface CinemaOverlayProps {
   videoId: string;
   onClose: () => void;
+  rememberChatPreference?: boolean;
 }
 
 function getEmbedDomain() {
   return window.location.hostname;
 }
 
-export function CinemaOverlay({ videoId, onClose }: CinemaOverlayProps) {
-  const [showChat, setShowChat] = useState(false);
+function loadSavedChatPreference() {
+  try {
+    return localStorage.getItem(CINEMA_CHAT_PREF_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
+export function CinemaOverlay({ videoId, onClose, rememberChatPreference = true }: CinemaOverlayProps) {
+  const [showChat, setShowChat] = useState(() => {
+    if (!rememberChatPreference) return false;
+    return loadSavedChatPreference();
+  });
   const { t } = useSettings();
   const isMobile = useIsMobile();
   const embedDomain = getEmbedDomain();
+  const playerUrl = `https://www.youtube-nocookie.com/embed/${videoId}?autoplay=1&playsinline=1&rel=0&modestbranding=1&enablejsapi=1&origin=${encodeURIComponent(window.location.origin)}`;
   const chatUrl = `https://www.youtube.com/live_chat?v=${videoId}&embed_domain=${embedDomain}`;
+
+  useEffect(() => {
+    setShowChat(rememberChatPreference ? loadSavedChatPreference() : false);
+  }, [videoId, rememberChatPreference]);
+
+  const handleToggleChat = (checked: boolean) => {
+    setShowChat(checked);
+    if (!rememberChatPreference) return;
+    try {
+      localStorage.setItem(CINEMA_CHAT_PREF_KEY, checked ? "1" : "0");
+    } catch {
+      // Ignore storage errors and keep in-memory state.
+    }
+  };
 
   return (
     <div
@@ -27,7 +56,10 @@ export function CinemaOverlay({ videoId, onClose }: CinemaOverlayProps) {
       onClick={onClose}
     >
       <div
-        className="relative w-full max-w-[1380px] mx-4"
+        className={cn(
+          "relative w-full mx-4 transition-all duration-300 ease-in-out",
+          isMobile ? "max-w-[1380px]" : showChat ? "max-w-[1680px]" : "max-w-[1380px]"
+        )}
         onClick={(e) => e.stopPropagation()}
       >
         {/* Floating controls — absolute on top of content, no layout impact */}
@@ -43,7 +75,7 @@ export function CinemaOverlay({ videoId, onClose }: CinemaOverlayProps) {
             <Switch
               id="chat-toggle"
               checked={showChat}
-              onCheckedChange={setShowChat}
+              onCheckedChange={handleToggleChat}
             />
           </div>
           <button
@@ -66,7 +98,7 @@ export function CinemaOverlay({ videoId, onClose }: CinemaOverlayProps) {
             className="aspect-video rounded-lg overflow-hidden flex-1 min-w-0 transition-all duration-300 ease-in-out"
           >
             <iframe
-              src={`https://www.youtube.com/embed/${videoId}?autoplay=1`}
+              src={playerUrl}
               className="w-full h-full"
               allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
               allowFullScreen
@@ -81,7 +113,7 @@ export function CinemaOverlay({ videoId, onClose }: CinemaOverlayProps) {
               showChat
                 ? isMobile
                   ? "w-full h-[300px] opacity-100 mt-3 border border-border/50"
-                : "w-[300px] shrink-0 opacity-100 ml-3 border border-border/50"
+                  : "w-[300px] shrink-0 opacity-100 ml-3 border border-border/50"
                 : isMobile
                   ? "w-full h-0 opacity-0 overflow-hidden"
                   : "w-0 opacity-0 overflow-hidden"
@@ -99,20 +131,25 @@ export function CinemaOverlay({ videoId, onClose }: CinemaOverlayProps) {
   );
 }
 
+interface CinemaPayload {
+  videoId: string;
+  rememberChatPreference?: boolean;
+}
+
 // Global cinema state
-let openCinema: ((videoId: string) => void) | null = null;
+let openCinema: ((payload: CinemaPayload) => void) | null = null;
 
 export function useCinema() {
-  const [videoId, setVideoId] = useState<string | null>(null);
+  const [payload, setPayload] = useState<CinemaPayload | null>(null);
 
-  openCinema = (id: string) => setVideoId(id);
+  openCinema = (nextPayload: CinemaPayload) => setPayload(nextPayload);
 
   return {
-    videoId,
-    close: () => setVideoId(null),
+    payload,
+    close: () => setPayload(null),
   };
 }
 
-export function triggerCinema(videoId: string) {
-  openCinema?.(videoId);
+export function triggerCinema(videoId: string, options?: { rememberChatPreference?: boolean }) {
+  openCinema?.({ videoId, rememberChatPreference: options?.rememberChatPreference });
 }

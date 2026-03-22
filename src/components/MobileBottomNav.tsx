@@ -1,9 +1,10 @@
-import { Home, Heart, Users, MonitorPlay, Radio, MoreHorizontal, ListMusic, Settings } from "lucide-react";
+import { Home, Heart, Users, MonitorPlay, Radio, MoreHorizontal, ListMusic, Search, Settings } from "lucide-react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { useSettings } from "@/contexts/SettingsContext";
 import { cn } from "@/lib/utils";
 import { useState } from "react";
 import { SettingsPanel } from "@/components/SettingsPanel";
+import { openGlobalSearch } from "@/components/GlobalSearch";
 import {
   Popover,
   PopoverContent,
@@ -83,6 +84,16 @@ export function MobileBottomNav() {
               sideOffset={8}
               className="w-48 p-1 bg-card border-border"
             >
+              <button
+                onClick={() => {
+                  setMoreOpen(false);
+                  openGlobalSearch();
+                }}
+                className="flex items-center gap-3 w-full rounded-md px-3 py-2.5 text-sm font-medium text-foreground hover:bg-accent transition-colors min-h-[44px]"
+              >
+                <Search className="w-4 h-4" />
+                {t.nav.search}
+              </button>
               {moreItems.map((item) => {
                 const active = isActive(item.url);
                 return (

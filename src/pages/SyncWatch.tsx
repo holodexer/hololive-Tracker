@@ -1,6 +1,6 @@
 import { useState, useRef, useCallback, useEffect, useMemo } from "react";
 import { useSearchParams } from "react-router-dom";
-import { Radio, Copy, Plus, Users, RefreshCw, ArrowLeft, Film } from "lucide-react";
+import { Radio, Copy, Plus, Users, RefreshCw, ArrowLeft, Film, Wifi, WifiOff, RotateCcw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -45,6 +45,15 @@ interface SessionData {
   roomId: string;
 }
 
+interface ActiveRoomEntry {
+  roomId: string;
+  hostPeerId: string;
+  hostNickname?: string;
+  hostAvatar?: string;
+  peerCount: number;
+  updatedAt: number;
+}
+
 function saveSession(data: SessionData) {
   sessionStorage.setItem(SESSION_KEY, JSON.stringify(data));
 }
@@ -70,6 +79,7 @@ export default function SyncWatch() {
   const roomParam = searchParams.get("room");
   const savedSession = useRef(loadSession()).current;
   const initialRoomCandidate = useRef(roomParam ?? savedSession?.roomId ?? null).current;
+  const initialRoomValidationDoneRef = useRef(false);
 
   const initialRoom = initialRoomCandidate;
   // Re-entering an existing room should not reclaim host automatically.
@@ -83,11 +93,12 @@ export default function SyncWatch() {
   const [joinInput, setJoinInput] = useState("");
   const [isJoiningRoom, setIsJoiningRoom] = useState(false);
   const [isValidatingInitialRoom, setIsValidatingInitialRoom] = useState(Boolean(initialRoomCandidate && !initialHost));
+  const [activeRooms, setActiveRooms] = useState<ActiveRoomEntry[]>([]);
   const [sidebarTab, setSidebarTab] = useState<"members" | "chat" | "log" | "queue">("members");
   const [countdown, setCountdown] = useState<{ videoId: string; title?: string } | null>(null);
   const [mobileSection, setMobileSection] = useState<"sidebar" | "collapsed">("sidebar");
   const [showClips, setShowClips] = useState(false);
-  const [clipsActiveTab, setClipsActiveTab] = useState<"live" | "archives" | "clips">("live");
+  const [clipsActiveTab, setClipsActiveTab] = useState<"live" | "archives" | "clips" | "playlists">("live");
 
   const playerRef = useRef<any>(null);
   const directVideoRef = useRef<HTMLVideoElement | null>(null);
@@ -99,6 +110,9 @@ export default function SyncWatch() {
   const currentVideoIdRef = useRef<string | null>(null);
   const videoChangeLockRef = useRef(false);
   const playNextRef = useRef<() => void>(() => {});
+  const lastGuestApplyAtRef = useRef(0);
+  const guestAutoplayKickDoneForRef = useRef<string | null>(null);
+  const [needsGuestUnmute, setNeedsGuestUnmute] = useState(false);
   const [playerHeight, setPlayerHeight] = useState<number | null>(null);
   const currentMedia = useMemo(
     () => (currentVideoId ? deserializeMedia(currentVideoId) : null),
@@ -114,10 +128,39 @@ export default function SyncWatch() {
     broadcastSync, broadcastVideoChange, toggleGuestControl,
     onSyncRequestRef, notifyPlayerReady, resetState,
     queue, addToQueue, removeFromQueue, moveInQueue, playFromQueue, playNextFromQueue,
-    SYNC_THRESHOLD,
+    SYNC_THRESHOLD, requestSync, connectionStatus,
   } = useSyncWatch({ roomId: needsNickname || isValidatingInitialRoom ? null : roomId, nickname: username, avatar, isHost });
 
   const effectiveHost = amIHost || (isHost && peerCount <= 1);
+  const connectionBadge = useMemo(() => {
+    switch (connectionStatus) {
+      case "connected":
+        return {
+          icon: Wifi,
+          label: t.sync.connected,
+          className: "border-emerald-500/25 bg-emerald-500/10 text-emerald-500",
+        };
+      case "reconnecting":
+        return {
+          icon: RefreshCw,
+          label: t.sync.reconnecting,
+          className: "border-amber-500/25 bg-amber-500/10 text-amber-500",
+        };
+      case "error":
+        return {
+          icon: WifiOff,
+          label: t.sync.connectionError,
+          className: "border-destructive/25 bg-destructive/10 text-destructive",
+        };
+      case "connecting":
+      default:
+        return {
+          icon: RefreshCw,
+          label: t.sync.connecting,
+          className: "border-primary/25 bg-primary/10 text-primary",
+        };
+    }
+  }, [connectionStatus, t.sync.connected, t.sync.reconnecting, t.sync.connectionError, t.sync.connecting]);
   useEffect(() => { effectiveHostRef.current = effectiveHost; }, [effectiveHost]);
   useEffect(() => { guestControlEnabledRef.current = guestControlEnabled; }, [guestControlEnabled]);
   useEffect(() => { currentVideoIdRef.current = currentVideoId; }, [currentVideoId]);
@@ -156,9 +199,12 @@ export default function SyncWatch() {
 
     if (media.source === "youtube") {
       if (!playerRef.current?.getCurrentTime) return null;
+      const ytState = playerRef.current.getPlayerState?.();
       return {
         videoId: currentVideoIdRef.current,
-        isPlaying: playerRef.current.getPlayerState?.() === window.YT?.PlayerState?.PLAYING,
+        isPlaying:
+          ytState === window.YT?.PlayerState?.PLAYING ||
+          ytState === window.YT?.PlayerState?.BUFFERING,
         currentTime: playerRef.current.getCurrentTime(),
         timestamp: Date.now(),
       };
@@ -191,18 +237,89 @@ export default function SyncWatch() {
     }
   }, [roomId, username]);
 
+  // Subscribe active room registry for lobby list.
   useEffect(() => {
+    const registry = supabase.channel("sync-watch:rooms", {
+      config: { presence: { key: `lobby:${Math.random().toString(36).slice(2, 8)}` } },
+    });
+    const STALE_ROOM_MS = 6500;
+
+    const refreshActiveRooms = () => {
+      const presence = registry.presenceState();
+      const byRoom = new Map<string, ActiveRoomEntry>();
+      const now = Date.now();
+
+      for (const key of Object.keys(presence)) {
+        const entries = presence[key] as any[];
+        for (const entry of entries) {
+          if (!entry?.roomId || !entry?.hostPeerId) continue;
+          const current = byRoom.get(entry.roomId);
+          const next: ActiveRoomEntry = {
+            roomId: entry.roomId,
+            hostPeerId: entry.hostPeerId,
+            hostNickname: typeof entry.hostNickname === "string" ? entry.hostNickname : undefined,
+            hostAvatar: typeof entry.hostAvatar === "string" ? entry.hostAvatar : undefined,
+            peerCount: Number(entry.peerCount) > 0 ? Number(entry.peerCount) : 1,
+            updatedAt: Number(entry.updatedAt) || Date.now(),
+          };
+          if (now - next.updatedAt > STALE_ROOM_MS) continue;
+          if (!current || next.updatedAt > current.updatedAt) {
+            byRoom.set(next.roomId, next);
+          }
+        }
+      }
+
+      setActiveRooms(
+        Array.from(byRoom.values()).sort((a, b) => b.updatedAt - a.updatedAt)
+      );
+    };
+
+    registry
+      .on("presence", { event: "sync" }, () => {
+        refreshActiveRooms();
+      })
+      .on("presence", { event: "join" }, () => {
+        refreshActiveRooms();
+      })
+      .on("presence", { event: "leave" }, () => {
+        refreshActiveRooms();
+      })
+      .subscribe((status) => {
+        if (status === "SUBSCRIBED") {
+          refreshActiveRooms();
+        }
+      });
+
+    const staleSweep = window.setInterval(() => {
+      refreshActiveRooms();
+    }, 2000);
+
+    return () => {
+      window.clearInterval(staleSweep);
+      registry.unsubscribe();
+    };
+  }, []);
+
+  useEffect(() => {
+    if (initialRoomValidationDoneRef.current) {
+      setIsValidatingInitialRoom(false);
+      return;
+    }
+
     if (!initialRoomCandidate || initialHost) {
+      initialRoomValidationDoneRef.current = true;
       setIsValidatingInitialRoom(false);
       return;
     }
 
     if (isHost || roomId !== initialRoomCandidate) {
+      initialRoomValidationDoneRef.current = true;
       setIsValidatingInitialRoom(false);
       return;
     }
 
     let cancelled = false;
+    initialRoomValidationDoneRef.current = true;
     setIsValidatingInitialRoom(true);
 
     validateRoomExists(initialRoomCandidate)
@@ -301,6 +418,15 @@ export default function SyncWatch() {
               playNextRef.current();
               return;
             }
+            // Ignore transient state churn right after switching media.
+            if (videoChangeLockRef.current) return;
+            // Ignore transient states to avoid broadcasting pause/play flapping.
+            if (
+              event.data !== window.YT.PlayerState.PLAYING &&
+              event.data !== window.YT.PlayerState.PAUSED
+            ) {
+              return;
+            }
             if (suppressSyncRef.current) return;
             if (!effectiveHostRef.current && !guestControlEnabledRef.current) return;
             const vid = currentVideoIdRef.current;
@@ -333,25 +459,50 @@ export default function SyncWatch() {
     // If different video, load it (from host's video_change broadcast)
     if (syncState.videoId !== currentVideoId) {
       setCurrentVideoId(syncState.videoId);
+      guestAutoplayKickDoneForRef.current = null;
+      setNeedsGuestUnmute(false);
+
+      if (!effectiveHost) {
+        // Ask one follow-up sync after media switch once local player is likely ready.
+        window.setTimeout(() => requestSync(), 1200);
+      }
       return;
     }
 
     const media = deserializeMedia(syncState.videoId);
     if (!media) return;
 
+    // Guard against race conditions where sync arrives before local player is ready.
+    if (media.source === "youtube" && !playerRef.current?.playVideo) {
+      return;
+    }
+
+    if (media.source === "direct" && !directVideoRef.current) {
+      return;
+    }
+
+    if (!effectiveHost) {
+      const now = Date.now();
+      if (now - lastGuestApplyAtRef.current < 650) {
+        return;
+      }
+      lastGuestApplyAtRef.current = now;
+    }
+
     suppressSyncRef.current = true;
 
     const timeDrift = (Date.now() - syncState.timestamp) / 1000;
-    const targetTime = syncState.currentTime + timeDrift + 0.5; // +0.5s latency compensation
+    const latencyCompensation = Math.min(0.35, Math.max(0.08, timeDrift * 0.3));
+    const targetTime = syncState.currentTime + timeDrift + latencyCompensation;
+    const syncThreshold = effectiveHost ? SYNC_THRESHOLD : 1.2;
     const currentPlayerTime = media.source === "youtube"
       ? (playerRef.current?.getCurrentTime?.() ?? 0)
       : (directVideoRef.current?.currentTime ?? 0);
 
-    if (Math.abs(currentPlayerTime - targetTime) > SYNC_THRESHOLD) {
+    if (Math.abs(currentPlayerTime - targetTime) > syncThreshold) {
       if (media.source === "youtube") {
         if (playerRef.current?.seekTo) {
-          // Strict sync: pause → seek → play for accuracy
-          playerRef.current.pauseVideo();
+          // For guests, avoid pause->seek oscillation loops and seek directly.
           playerRef.current.seekTo(targetTime, true);
         }
       } else if (directVideoRef.current) {
@@ -365,6 +516,21 @@ export default function SyncWatch() {
       setTimeout(() => {
         if (media.source === "youtube") {
           playerRef.current?.playVideo();
+
+          if (!effectiveHost) {
+            window.setTimeout(() => {
+              const yt = window.YT?.PlayerState;
+              const playerState = playerRef.current?.getPlayerState?.();
+              const isRunning = playerState === yt?.PLAYING || playerState === yt?.BUFFERING;
+
+              if (!isRunning && guestAutoplayKickDoneForRef.current !== syncState.videoId) {
+                playerRef.current?.mute?.();
+                playerRef.current?.playVideo?.();
+                guestAutoplayKickDoneForRef.current = syncState.videoId;
+                setNeedsGuestUnmute(true);
+              }
+            }, 650);
+          }
         } else {
           directVideoRef.current?.play().catch(() => {
             // Ignore autoplay restriction errors.
@@ -380,7 +546,7 @@ export default function SyncWatch() {
     }
 
     setTimeout(() => { suppressSyncRef.current = false; }, 500);
-  }, [syncState, effectiveHost, currentVideoId, guestControlEnabled]);
+  }, [syncState, effectiveHost, currentVideoId, guestControlEnabled, requestSync]);
 
   const handleCreateRoom = useCallback(() => {
     if (!username.trim()) {
@@ -393,8 +559,8 @@ export default function SyncWatch() {
     setSearchParams({ room: id });
   }, [setSearchParams, username]);
 
-  const handleJoinRoom = useCallback(() => {
-    const id = joinInput.trim();
+  const joinRoomById = useCallback((rawRoomId: string) => {
+    const id = rawRoomId.trim();
     if (!id || isJoiningRoom) return;
 
     setIsJoiningRoom(true);
@@ -417,7 +583,13 @@ export default function SyncWatch() {
       .finally(() => {
         setIsJoiningRoom(false);
       });
-  }, [isJoiningRoom, joinInput, setSearchParams, t.sync.roomNotFound, t.sync.roomValidationError, username]);
+  }, [isJoiningRoom, setSearchParams, t.sync.roomNotFound, t.sync.roomValidationError, username]);
+
+  const handleJoinRoom = useCallback(() => {
+    const id = joinInput.trim();
+    if (!id) return;
+    joinRoomById(id);
+  }, [joinInput, joinRoomById]);
 
   const handleNicknameConfirm = useCallback((name: string) => {
     setUsername(name);
@@ -498,6 +670,16 @@ export default function SyncWatch() {
     toggleGuestControl(enabled, enabled ? null : getHostState());
   }, [toggleGuestControl, getHostState]);
 
+  const handleRequestResync = useCallback(() => {
+    requestSync();
+    toast.success(t.sync.resyncRequested);
+  }, [requestSync, t.sync.resyncRequested]);
+
+  const handleGuestUnmute = useCallback(() => {
+    playerRef.current?.unMute?.();
+    setNeedsGuestUnmute(false);
+  }, []);
+
   const handleDirectVideoSync = useCallback(() => {
     if (suppressSyncRef.current) return;
     if (!effectiveHostRef.current && !guestControlEnabledRef.current) return;
@@ -542,7 +724,7 @@ export default function SyncWatch() {
 
   if (isValidatingInitialRoom) {
     return (
-      <div className="flex items-center justify-center min-h-[60vh]">
+      <div className="flex items-center justify-center min-h-[calc(100dvh-9rem)]">
         <div className="text-center space-y-3">
           <Radio className="w-10 h-10 text-primary mx-auto animate-pulse" />
           <p className="text-sm text-muted-foreground">{t.common.loading}</p>
@@ -559,8 +741,8 @@ export default function SyncWatch() {
   // Lobby
   if (!roomId) {
     return (
-      <div className="flex items-center justify-center min-h-[60vh]">
-        <div className="w-full max-w-md space-y-8">
+      <div className="flex items-center justify-center min-h-[calc(100dvh-9rem)] px-3">
+        <div className="w-full max-w-lg space-y-6">
           <div className="text-center space-y-2">
             <Radio className="w-12 h-12 text-primary mx-auto" />
             <h1 className="text-3xl font-bold text-foreground">{t.sync.syncWatch}</h1>
@@ -594,6 +776,45 @@ export default function SyncWatch() {
               <Button onClick={handleJoinRoom} variant="secondary" className="min-h-[48px]" disabled={isJoiningRoom || !joinInput.trim()}>
                 {isJoiningRoom ? t.common.loading : t.sync.join}
               </Button>
+            </div>
+
+            <div className="rounded-xl border border-border/60 p-2.5 space-y-2.5">
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">目前房間列表</p>
+              {activeRooms.length === 0 ? (
+                <p className="text-xs text-muted-foreground">目前沒有可加入的房間</p>
+              ) : (
+                <div className="grid grid-cols-3 gap-2 max-h-64 overflow-y-auto pr-1 sm:grid-cols-4">
+                  {activeRooms.map((room) => (
+                    <button
+                      key={room.roomId}
+                      type="button"
+                      onClick={() => joinRoomById(room.roomId)}
+                      disabled={isJoiningRoom}
+                      className="group aspect-square w-full rounded-xl border border-border/60 bg-gradient-to-b from-background/60 to-background/20 p-2 text-left shadow-sm transition-all duration-200 hover:border-primary/50 hover:shadow-md disabled:opacity-60 disabled:pointer-events-none"
+                    >
+                      <div className="flex h-full flex-col items-center justify-center gap-1.5 text-center">
+                        {room.hostAvatar ? (
+                          <img
+                            src={room.hostAvatar}
+                            alt={room.hostNickname || "Host"}
+                            className="h-10 w-10 rounded-full object-cover ring-2 ring-primary/25"
+                          />
+                        ) : (
+                          <div className="h-10 w-10 rounded-full bg-muted text-foreground flex items-center justify-center text-xs font-semibold ring-2 ring-border/70">
+                            {(room.hostNickname || "H").slice(0, 1).toUpperCase()}
+                          </div>
+                        )}
+                        <p className="max-w-full truncate text-[11px] font-semibold text-foreground group-hover:text-primary transition-colors">
+                          {room.hostNickname || "Host"}
+                        </p>
+                        <div className="rounded-full border border-border/60 bg-background/70 px-1.5 py-0.5 text-[10px] text-muted-foreground">
+                          {room.peerCount}人
+                        </div>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -739,7 +960,25 @@ export default function SyncWatch() {
           <span>{peerCount}</span>
         </div>
 
+        <div className={cn(
+          "flex items-center gap-2 rounded-2xl border px-3 py-2 text-xs font-medium",
+          connectionBadge.className,
+          isMobile && "min-h-[48px] justify-center"
+        )}>
+          <connectionBadge.icon
+            className={cn(
+              "w-3.5 h-3.5",
+              (connectionStatus === "connecting" || connectionStatus === "reconnecting") && "animate-spin"
+            )}
+          />
+          <span>{connectionBadge.label}</span>
+        </div>
+
         <div className={cn("flex items-center gap-2", isMobile ? "col-span-2 grid grid-cols-2" : "ml-auto") }>
+          <Button size="sm" variant="secondary" className="gap-1.5 min-h-[46px] md:min-h-0" onClick={handleRequestResync}>
+            <RotateCcw className="w-3.5 h-3.5" />
+            <span>{t.sync.resyncNow}</span>
+          </Button>
           <Button size="sm" variant="outline" className="gap-1.5 min-h-[46px] md:min-h-0" onClick={copyInviteLink}>
             <Copy className="w-3.5 h-3.5" />
             <span>{t.sync.copyInvite}</span>
@@ -825,6 +1064,7 @@ export default function SyncWatch() {
           loading: t.common.loading,
           liveNow: t.sync.liveNow,
           noLive: t.sync.noLive,
+          playlistsTab: t.sidebar.playlists,
         }}
       />
 
@@ -867,6 +1107,13 @@ export default function SyncWatch() {
                   onCancel={() => setCountdown(null)}
                 />
               )}
+              {!effectiveHost && needsGuestUnmute && currentMedia?.source === "youtube" && (
+                <div className="absolute left-3 bottom-3 z-30">
+                  <Button size="sm" variant="secondary" className="shadow-lg" onClick={handleGuestUnmute}>
+                    {t.sync.tapToUnmute}
+                  </Button>
+                </div>
+              )}
             </div>
           ) : (
             <div className="aspect-video rounded-lg border border-dashed border-border bg-card/30 flex items-center justify-center">
@@ -892,10 +1139,23 @@ async function validateRoomExists(roomId: string): Promise<boolean> {
 
   return new Promise((resolve, reject) => {
     let settled = false;
+    let presenceTimer: number | undefined;
+    const hardTimeout = window.setTimeout(() => {
+      void fail();
+    }, 5000);
+
+    const clearTimers = () => {
+      if (presenceTimer) {
+        window.clearTimeout(presenceTimer);
+        presenceTimer = undefined;
+      }
+      window.clearTimeout(hardTimeout);
+    };
 
     const finish = async (result: boolean) => {
       if (settled) return;
       settled = true;
+      clearTimers();
       await probe.unsubscribe();
       resolve(result);
     };
@@ -903,6 +1163,7 @@ async function validateRoomExists(roomId: string): Promise<boolean> {
     const fail = async () => {
       if (settled) return;
       settled = true;
+      clearTimers();
       await probe.unsubscribe();
       reject(new Error("room_probe_failed"));
     };
@@ -925,7 +1186,7 @@ async function validateRoomExists(roomId: string): Promise<boolean> {
             return;
           }
 
-          window.setTimeout(() => {
+          presenceTimer = window.setTimeout(() => {
             const latestPresence = probe.presenceState();
             const stillHasPeers = Object.values(latestPresence).some((entries) => Array.isArray(entries) && entries.length > 0);
             void finish(stillHasPeers);

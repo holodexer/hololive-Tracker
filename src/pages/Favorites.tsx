@@ -12,6 +12,7 @@ import { useQuery } from "@tanstack/react-query";
 import { format } from "date-fns";
 import { addDays, isAfter, isBefore } from "date-fns";
 import { TAB_PANEL_TRANSITION_CLASS } from "@/lib/transitions";
+import { PageHeader } from "@/components/PageHeader";
 
 const PAGE_SIZE = 48;
 
@@ -177,6 +178,11 @@ export default function Favorites() {
 
   return (
     <div className="space-y-6">
+      <PageHeader
+        title={t.favorites.title}
+        badge={`${favorites.length}`}
+        description={favorites.length === 0 ? t.favorites.noFavorites : undefined}
+      />
       {/* Tabs */}
       <div className="flex gap-1 border-b border-border">
         {tabs.map((tab) => (
@@ -224,7 +230,7 @@ export default function Favorites() {
                 {sortedFavLive.length === 0 ? (
                   <p className="text-muted-foreground">{t.favorites.noLive}</p>
                 ) : (
-                  <StaggerList className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                  <StaggerList className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                     {sortedFavLive.map((s) => (
                       <StreamCard key={s.id} stream={s} />
                     ))}
@@ -301,7 +307,7 @@ export default function Favorites() {
             <p className="text-muted-foreground">{t.favorites.noArchives}</p>
           ) : (
             <>
-              <StaggerList className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+              <StaggerList className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                 {archiveVideos.map((s) => (
                   <StreamCard key={s.id} stream={s} />
                 ))}
@@ -333,7 +339,7 @@ export default function Favorites() {
             <p className="text-muted-foreground">{t.favorites.noClips}</p>
           ) : (
             <>
-              <StaggerList className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+              <StaggerList className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                 {clipVideos.map((s) => (
                   <StreamCard key={s.id} stream={s} />
                 ))}

@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from "react";
-import { X, Film, Radio, Archive, Loader2, Eye, Clock } from "lucide-react";
+import { X, Film, Radio, Archive, Loader2, Eye, Clock, ListMusic, ChevronLeft } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   fetchHololiveClips,
@@ -18,8 +18,8 @@ interface ClipsOverlayProps {
   open: boolean;
   onClose: () => void;
   onSelectClip: (videoId: string, title: string) => void;
-  onTabChange?: (tab: "live" | "archives" | "clips") => void;
-  activeTab?: "live" | "archives" | "clips";
+  onTabChange?: (tab: "live" | "archives" | "clips" | "playlists") => void;
+  activeTab?: "live" | "archives" | "clips" | "playlists";
   locale?: "en" | "zh-TW" | "ja";
   labels: {
     clipsTitle: string;
@@ -37,6 +37,7 @@ interface ClipsOverlayProps {
     loading: string;
     liveNow?: string;
     noLive?: string;
+    playlistsTab?: string;
   };
 }
 
@@ -62,13 +63,15 @@ export function ClipsOverlay({
   locale = "en",
   labels,
 }: ClipsOverlayProps) {
-  const { hidePrivateVideos, clipLanguages, favorites } = useSettings();
-  const [activeTab, setActiveTab] = useState<"live" | "archives" | "clips">(externalActiveTab);
+  const { hidePrivateVideos, clipLanguages, favorites, playlists, getVideoMeta } = useSettings();
+  const [activeTab, setActiveTab] = useState<"live" | "archives" | "clips" | "playlists">(externalActiveTab);
   const [favoritesOnly, setFavoritesOnly] = useState(false);
+  const [selectedPlaylistId, setSelectedPlaylistId] = useState<string | null>(null);
 
   // Sync internal state with external activeTab
   useEffect(() => {
     setActiveTab(externalActiveTab);
+    if (externalActiveTab !== "playlists") setSelectedPlaylistId(null);
   }, [externalActiveTab]);
 
   // Live tab state
@@ -349,6 +352,8 @@ export function ClipsOverlay({
               <Radio className="w-5 h-5 text-primary" />
             ) : activeTab === "archives" ? (
               <Archive className="w-5 h-5 text-primary" />
+            ) : activeTab === "playlists" ? (
+              <ListMusic className="w-5 h-5 text-primary" />
             ) : (
               <Film className="w-5 h-5 text-primary" />
             )}
@@ -357,7 +362,9 @@ export function ClipsOverlay({
                 ? (labels.liveNow || "直播中")
                 : activeTab === "archives"
                   ? labels.archivesTab
-                  : labels.clipsTitle}
+                  : activeTab === "playlists"
+                    ? (labels.playlistsTab || "播放清單")
+                    : labels.clipsTitle}
             </h2>
           </div>
           <button
@@ -371,13 +378,14 @@ export function ClipsOverlay({
         {/* Tabs */}
         <div className="flex items-center justify-between gap-3 border-b border-border/30 bg-card/40 px-6 py-2 shrink-0">
           <div className="flex gap-1">
-            {(["live", "archives", "clips"] as const).map((tab) => (
+            {(["live", "archives", "clips", "playlists"] as const).map((tab) => (
               <button
                 key={tab}
                 onClick={() => {
                   setActiveTab(tab);
                   onTabChange?.(tab);
                   scrollTopRef.current = 0;
+                  if (tab !== "playlists") setSelectedPlaylistId(null);
                 }}
                 className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${
                   activeTab === tab
@@ -385,12 +393,17 @@ export function ClipsOverlay({
                     : "border-transparent text-muted-foreground hover:text-foreground"
                 }`}
               >
-                {tab === "live" ? <Radio className="w-4 h-4" /> : tab === "archives" ? <Archive className="w-4 h-4" /> : <Film className="w-4 h-4" />}
+                {tab === "live" ? <Radio className="w-4 h-4" />
+                  : tab === "archives" ? <Archive className="w-4 h-4" />
+                  : tab === "playlists" ? <ListMusic className="w-4 h-4" />
+                  : <Film className="w-4 h-4" />}
                 {tab === "live"
                   ? (labels.liveNow || "直播中")
                   : tab === "archives"
                     ? labels.archivesTab
-                    : labels.clipsTab}
+                    : tab === "playlists"
+                      ? (labels.playlistsTab || "播放清單")
+                      : labels.clipsTab}
               </button>
             ))}
           </div>
@@ -425,7 +438,7 @@ export function ClipsOverlay({
                   <p className="text-sm text-muted-foreground">{labels.noLive || "目前沒有直播中的成員"}</p>
                 </div>
               ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                   {liveVideos.map((video) => {
                     const thumbnail = `https://i.ytimg.com/vi/${video.id}/mqdefault.jpg`;
                     const channelName = video.channel?.name || "";
@@ -500,7 +513,7 @@ export function ClipsOverlay({
                   <p className="text-sm text-muted-foreground">{labels.noArchivesFound || labels.noClipsFound}</p>
                 </div>
               ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                   {archives.map((video) => {
                     const thumbnail = `https://i.ytimg.com/vi/${video.id}/mqdefault.jpg`;
                     const channelName = video.channel?.name || "";
@@ -538,7 +551,7 @@ export function ClipsOverlay({
                   })}
                 </div>
               )
-            ) : (
+            ) : activeTab === "clips" ? (
               // Clips section
               clipsLoading && clips.length === 0 ? (
                 <div className="flex justify-center py-8">
@@ -552,7 +565,7 @@ export function ClipsOverlay({
                   <p className="text-sm text-muted-foreground">{labels.noClipsFound}</p>
                 </div>
               ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                   {clips.map((clip) => {
                     const thumbnailUrl = `https://i.ytimg.com/vi/${clip.id}/mqdefault.jpg`;
                     const channelName = clip.channel?.name || "";
@@ -590,6 +603,92 @@ export function ClipsOverlay({
                   })}
                 </div>
               )
+            ) : (
+              // Playlists section
+              selectedPlaylistId === null ? (
+                // Playlist grid
+                playlists.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-16 gap-3 text-muted-foreground">
+                    <ListMusic className="w-10 h-10 opacity-40" />
+                    <p className="text-sm">{labels.playlistsTab || "播放清單"}</p>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                    {playlists.map((pl) => {
+                      const thumb = pl.videoIds.length > 0
+                        ? `https://i.ytimg.com/vi/${pl.videoIds[0]}/mqdefault.jpg`
+                        : null;
+                      return (
+                        <button
+                          key={pl.id}
+                          type="button"
+                          onClick={() => setSelectedPlaylistId(pl.id)}
+                          className="group block rounded-lg overflow-hidden bg-card border border-border hover:border-primary/50 transition-colors text-left"
+                        >
+                          <div className="relative aspect-video bg-muted">
+                            {thumb ? (
+                              <img src={thumb} alt={pl.name} className="w-full h-full object-cover" loading="lazy" />
+                            ) : (
+                              <div className="w-full h-full flex items-center justify-center">
+                                <ListMusic className="w-8 h-8 text-muted-foreground" />
+                              </div>
+                            )}
+                            <div className="absolute bottom-0 inset-x-0 bg-gradient-to-t from-black/80 to-transparent px-2 pt-4 pb-1.5 flex items-end justify-between gap-1">
+                              <span className="text-xs font-semibold text-white line-clamp-1">{pl.name}</span>
+                              <span className="text-[10px] text-white/70 shrink-0">{pl.videoIds.length}本</span>
+                            </div>
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )
+              ) : (() => {
+                // Video list inside selected playlist
+                const pl = playlists.find((p) => p.id === selectedPlaylistId);
+                if (!pl) { setSelectedPlaylistId(null); return null; }
+                return (
+                  <div className="space-y-4">
+                    <button
+                      type="button"
+                      onClick={() => setSelectedPlaylistId(null)}
+                      className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
+                    >
+                      <ChevronLeft className="w-4 h-4" />
+                      {pl.name}
+                    </button>
+                    {pl.videoIds.length === 0 ? (
+                      <div className="flex justify-center py-12 text-muted-foreground text-sm">尚無影片</div>
+                    ) : (
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                        {pl.videoIds.map((videoId) => {
+                          const meta = getVideoMeta(videoId);
+                          const thumb = `https://i.ytimg.com/vi/${videoId}/mqdefault.jpg`;
+                          const title = meta?.title || videoId;
+                          const channel = meta?.channelName || "";
+                          return (
+                            <button
+                              key={videoId}
+                              type="button"
+                              onClick={() => onSelectClip(videoId, title)}
+                              className="group block rounded-lg overflow-hidden bg-card border border-border hover:border-primary/50 transition-colors text-left"
+                            >
+                              <div className="relative aspect-video">
+                                <img src={thumb} alt={title} className="w-full h-full object-cover" loading="lazy" />
+                                <div className="absolute inset-0 bg-gradient-to-t from-background/90 via-background/20 to-transparent" />
+                                <div className="absolute bottom-0 left-0 right-0 p-3">
+                                  <p className="text-sm font-semibold text-foreground truncate group-hover:text-primary transition-colors">{title}</p>
+                                  {channel && <p className="text-xs text-muted-foreground truncate mt-0.5">{channel}</p>}
+                                </div>
+                              </div>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                );
+              })()
             )}
 
             {/* Load more button */}
@@ -639,7 +738,9 @@ export function ClipsOverlay({
             ? labels.selectClipToAdd
             : activeTab === "archives"
               ? (labels.selectArchiveToAdd || labels.selectClipToAdd)
-              : (labels.selectLiveToAdd || labels.selectClipToAdd)}
+              : activeTab === "playlists"
+                ? labels.selectClipToAdd
+                : (labels.selectLiveToAdd || labels.selectClipToAdd)}
         </div>
       </div>
     </div>

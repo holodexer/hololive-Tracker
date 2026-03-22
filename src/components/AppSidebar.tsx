@@ -1,9 +1,10 @@
-import { Home, Users, Heart, ListMusic, MonitorPlay, Radio } from "lucide-react";
+import { Home, Users, Heart, ListMusic, MonitorPlay, Radio, Search } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import { useHolodexStreams, useHololiveChannels } from "@/hooks/useHolodex";
 import { useSettings } from "@/contexts/SettingsContext";
 import { SettingsPanel } from "@/components/SettingsPanel";
-import { useNavigate, useLocation } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
+import { openGlobalSearch } from "@/components/GlobalSearch";
 import {
   Sidebar,
   SidebarContent,
@@ -25,9 +26,11 @@ export function AppSidebar() {
   const collapsed = state === "collapsed";
   const { data } = useHolodexStreams();
   const { data: channels } = useHololiveChannels();
-  const { favorites, playlists, locale, t } = useSettings();
+  const { favorites, locale, t } = useSettings();
   const navigate = useNavigate();
-  const location = useLocation();
+  const shortcutLabel = typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform)
+    ? "Cmd+K"
+    : "Ctrl+K";
 
   const navItems = [
     { title: t.nav.home, url: "/", icon: Home },
@@ -65,6 +68,19 @@ export function AppSidebar() {
         </div>
       </SidebarHeader>
       <SidebarContent>
+        <div className="px-2 pt-3 pb-1">
+          <button
+            type="button"
+            onClick={openGlobalSearch}
+            className="flex w-full items-center gap-2 rounded-xl border border-sidebar-border/60 bg-sidebar-accent/40 px-3 py-2 text-left text-sm text-sidebar-foreground transition-colors hover:bg-sidebar-accent group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-2"
+            title={t.search.open}
+          >
+            <Search className="h-4 w-4 shrink-0 text-primary" />
+            <span className="min-w-0 flex-1 truncate group-data-[collapsible=icon]:hidden">{t.nav.search}</span>
+            <span className="text-[11px] text-muted-foreground group-data-[collapsible=icon]:hidden">{shortcutLabel}</span>
+          </button>
+        </div>
+
         <SidebarGroup>
           <SidebarGroupLabel className="text-primary font-bold text-xs tracking-widest uppercase">
             {t.sidebar.navigation}

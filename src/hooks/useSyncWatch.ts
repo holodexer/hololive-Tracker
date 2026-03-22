@@ -36,6 +36,8 @@ export interface SystemMessage {
   timestamp: number;
 }
 
+export type SyncConnectionStatus = "idle" | "connecting" | "connected" | "reconnecting" | "error";
+
 interface UseSyncWatchOptions {
   roomId: string | null;
   nickname: string;
@@ -58,6 +60,7 @@ function generatePeerId(): string {
 
 export function useSyncWatch({ roomId, nickname, avatar, isHost }: UseSyncWatchOptions) {
   const channelRef = useRef<RealtimeChannel | null>(null);
+  const roomRegistryRef = useRef<RealtimeChannel | null>(null);
   const peerIdRef = useRef(generatePeerId());
 
   const [syncState, setSyncState] = useState<SyncState | null>(null);
@@ -69,9 +72,11 @@ export function useSyncWatch({ roomId, nickname, avatar, isHost }: UseSyncWatchO
   const [hostId, setHostId] = useState<string | null>(null);
   const [playerReady, setPlayerReady] = useState(false);
   const [queue, setQueue] = useState<QueueItem[]>([]);
+  const [connectionStatus, setConnectionStatus] = useState<SyncConnectionStatus>("idle");
 
   // Callback ref so the host can respond to REQUEST_SYNC
   const onSyncRequestRef = useRef<(() => void) | null>(null);
+  const lastSyncRequestAtRef = useRef(0);
 
   const isHostRef = useRef(isHost);
   const guestControlRef = useRef(false);
@@ -123,26 +128,116 @@ export function useSyncWatch({ roomId, nickname, avatar, isHost }: UseSyncWatchO
   const myPeerId = peerIdRef.current;
   const amIHost = computedHostId === myPeerId;
 
+  // Publish active room host info to a shared presence channel for lobby room listing.
+  useEffect(() => {
+    if (!roomId || !nickname || (!amIHost && !isHostRef.current)) {
+      if (roomRegistryRef.current) {
+        (roomRegistryRef.current as any).untrack?.();
+        roomRegistryRef.current.unsubscribe();
+        roomRegistryRef.current = null;
+      }
+      return;
+    }
+
+    let cancelled = false;
+    const registry = supabase.channel("sync-watch:rooms", {
+      config: { presence: { key: `host:${myPeerId}` } },
+    });
+
+    registry.subscribe(async (status) => {
+      if (cancelled) return;
+      if (status === "SUBSCRIBED") {
+        await registry.track({
+          roomId,
+          hostPeerId: myPeerId,
+          hostNickname: nickname,
+          hostAvatar: avatar,
+          peerCount: 1,
+          updatedAt: Date.now(),
+        });
+      }
+    });
+
+    roomRegistryRef.current = registry;
+
+    const heartbeat = window.setInterval(() => {
+      if (cancelled || !roomRegistryRef.current) return;
+      roomRegistryRef.current.track({
+        roomId,
+        hostPeerId: myPeerId,
+        hostNickname: nickname,
+        hostAvatar: avatar,
+        peerCount: Math.max(peers.length, 1),
+        updatedAt: Date.now(),
+      }).catch(() => {
+        // Ignore transient track errors during reconnect.
+      });
+    }, 2000);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(heartbeat);
+      (registry as any).untrack?.();
+      registry.unsubscribe();
+      if (roomRegistryRef.current === registry) {
+        roomRegistryRef.current = null;
+      }
+    };
+  }, [roomId, nickname, avatar, amIHost, myPeerId, peers.length]);
+
+  // Keep registry payload fresh so lobby cards can show host avatar and room size.
+  useEffect(() => {
+    if (!roomId || !nickname || (!amIHost && !isHostRef.current)) return;
+    if (!roomRegistryRef.current) return;
+
+    roomRegistryRef.current.track({
+      roomId,
+      hostPeerId: myPeerId,
+      hostNickname: nickname,
+      hostAvatar: avatar,
+      peerCount: Math.max(peers.length, 1),
+      updatedAt: Date.now(),
+    }).catch(() => {
+      // Ignore transient track errors during reconnect.
+    });
+  }, [roomId, nickname, avatar, amIHost, myPeerId, peers.length]);
+
   // Notify player ready — triggers sync request after YT player is initialized
   const notifyPlayerReady = useCallback(() => {
     setPlayerReady(true);
   }, []);
 
+  const sendRequestSync = useCallback((cooldownMs = 800) => {
+    if (!channelRef.current) return;
+    const now = Date.now();
+    if (now - lastSyncRequestAtRef.current < cooldownMs) return;
+    lastSyncRequestAtRef.current = now;
+    channelRef.current.send({
+      type: "broadcast",
+      event: "request_sync",
+      payload: { from: nickname, timestamp: now },
+    });
+  }, [nickname]);
+
   // When player becomes ready and we're not host, request sync again (for seek accuracy)
   useEffect(() => {
     if (!playerReady || !channelRef.current) return;
     if (amIHost) return;
-    channelRef.current.send({
-      type: "broadcast",
-      event: "request_sync",
-      payload: { from: nickname, timestamp: Date.now() },
-    });
-  }, [playerReady, amIHost, nickname]);
+    sendRequestSync(300);
+  }, [playerReady, amIHost, sendRequestSync]);
 
   useEffect(() => {
     if (!roomId || !nickname) return;
 
+    setConnectionStatus("connecting");
+
     const peerId = peerIdRef.current;
+    let isActive = true;
+    const connectTimeout = window.setTimeout(() => {
+      if (!isActive) return;
+      setConnectionStatus("error");
+      addSystemMessage("Unable to establish connection. Please retry joining the room.");
+    }, 10000);
 
     const channel = supabase.channel(`sync-watch:${roomId}`, {
       config: { broadcast: { self: false } },
@@ -220,10 +315,22 @@ export function useSyncWatch({ roomId, nickname, avatar, isHost }: UseSyncWatchO
         setRawPeers(peerList);
       })
       .on("presence", { event: "join" }, ({ newPresences }) => {
+        let hasRemoteJoin = false;
         for (const p of newPresences as any[]) {
           if (p.peerId !== peerId) {
+            hasRemoteJoin = true;
             addSystemMessage(`${p.nickname} joined the room`);
           }
+        }
+
+        const amCurrentHost = hostIdRef.current === peerId || isHostRef.current;
+        if (hasRemoteJoin && amCurrentHost && onSyncRequestRef.current) {
+          // Give the newcomer time to initialize, then push one authoritative snapshot.
+          window.setTimeout(() => {
+            if (onSyncRequestRef.current) {
+              onSyncRequestRef.current();
+            }
+          }, 900);
         }
       })
       .on("presence", { event: "leave" }, ({ leftPresences }) => {
@@ -233,7 +340,11 @@ export function useSyncWatch({ roomId, nickname, avatar, isHost }: UseSyncWatchO
         // Host succession is handled reactively via computedHostId
       })
       .subscribe(async (status) => {
+        if (!isActive) return;
+
         if (status === "SUBSCRIBED") {
+          window.clearTimeout(connectTimeout);
+          setConnectionStatus("connected");
           await channel.track({
             peerId,
             nickname,
@@ -245,22 +356,40 @@ export function useSyncWatch({ roomId, nickname, avatar, isHost }: UseSyncWatchO
             setHostId(peerId);
           } else {
             // Immediately request sync so new joiners get the current video + state
-            channel.send({
-              type: "broadcast",
-              event: "request_sync",
-              payload: { from: nickname, timestamp: Date.now() },
-            });
+            sendRequestSync(0);
           }
+          return;
+        }
+
+        if (status === "TIMED_OUT") {
+          window.clearTimeout(connectTimeout);
+          setConnectionStatus("reconnecting");
+          addSystemMessage("Connection timed out. Reconnecting...");
+          return;
+        }
+
+        if (status === "CLOSED") {
+          window.clearTimeout(connectTimeout);
+          setConnectionStatus("reconnecting");
+          return;
+        }
+
+        if (status === "CHANNEL_ERROR") {
+          window.clearTimeout(connectTimeout);
+          setConnectionStatus("error");
+          addSystemMessage("Connection error. Try re-syncing in a moment.");
         }
       });
 
     channelRef.current = channel;
 
     return () => {
+      isActive = false;
+      window.clearTimeout(connectTimeout);
       channel.unsubscribe();
       channelRef.current = null;
     };
-  }, [roomId, nickname, avatar]);
+  }, [roomId, nickname, avatar, sendRequestSync]);
 
   const broadcast = useCallback(
     (event: string, payload: any) => {
@@ -309,13 +438,8 @@ export function useSyncWatch({ roomId, nickname, avatar, isHost }: UseSyncWatchO
   );
 
   const requestSync = useCallback(() => {
-    if (!channelRef.current) return;
-    channelRef.current.send({
-      type: "broadcast",
-      event: "request_sync",
-      payload: { from: nickname, timestamp: Date.now() },
-    });
-  }, [nickname]);
+    sendRequestSync(600);
+  }, [sendRequestSync]);
 
   const canControl = amIHost || guestControlEnabled;
 
@@ -386,6 +510,7 @@ export function useSyncWatch({ roomId, nickname, avatar, isHost }: UseSyncWatchO
     setHostId(null);
     setPlayerReady(false);
     setQueue([]);
+    setConnectionStatus("idle");
   }, []);
 
   return {
@@ -401,6 +526,7 @@ export function useSyncWatch({ roomId, nickname, avatar, isHost }: UseSyncWatchO
     myPeerId,
     hostId: computedHostId,
     queue,
+    connectionStatus,
     broadcast,
     broadcastSync,
     broadcastVideoChange,

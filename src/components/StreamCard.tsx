@@ -1,21 +1,23 @@
 import type { HolodexVideo } from "@/lib/holodex";
 import { format } from "date-fns";
-import { Eye, Clock, ListPlus, Check } from "lucide-react";
+import { Eye, Clock, ListPlus, Check, Bell, BellRing } from "lucide-react";
 import { useSettings } from "@/contexts/SettingsContext";
 import { triggerCinema } from "@/components/CinemaOverlay";
 import { getDisplayName } from "@/lib/utils";
 import { useState, useRef, useEffect } from "react";
+import { toast } from "sonner";
 
 interface StreamCardProps {
   stream: HolodexVideo;
 }
 
 export function StreamCard({ stream }: StreamCardProps) {
-  const { directYoutube, locale, playlists, addToPlaylist, t } = useSettings();
+  const { directYoutube, locale, playlists, addToPlaylist, recordRecentVideo, toggleReminder, hasReminder, t } = useSettings();
   const isLive = stream.status === "live";
   const isUpcoming = stream.status === "upcoming";
   const thumbnail = `https://i.ytimg.com/vi/${stream.id}/mqdefault.jpg`;
   const channelName = getDisplayName(stream.channel, locale);
+  const reminderEnabled = hasReminder(stream.id);
 
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -30,9 +32,17 @@ export function StreamCard({ stream }: StreamCardProps) {
   }, [menuOpen]);
 
   const handleClick = (e: React.MouseEvent) => {
+    recordRecentVideo({
+      id: stream.id,
+      title: stream.title,
+      channelName,
+      thumbnail,
+      status: stream.status,
+    });
+
     if (!directYoutube) {
       e.preventDefault();
-      triggerCinema(stream.id);
+      triggerCinema(stream.id, { rememberChatPreference: isLive || isUpcoming });
     }
   };
 
@@ -50,6 +60,30 @@ export function StreamCard({ stream }: StreamCardProps) {
       channelName,
     });
     setMenuOpen(false);
+  };
+
+  const handleReminderClick = async (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    if (!reminderEnabled && typeof window !== "undefined" && "Notification" in window && Notification.permission === "default") {
+      try {
+        await Notification.requestPermission();
+      } catch {
+        // Ignore permission request failures and still save the reminder.
+      }
+    }
+
+    toggleReminder({
+      videoId: stream.id,
+      title: stream.title,
+      channelName,
+      scheduledFor: stream.available_at,
+    });
+
+    toast.success(reminderEnabled ? t.reminders.removed : t.reminders.added, {
+      description: stream.title,
+    });
   };
 
   return (
@@ -93,15 +127,30 @@ export function StreamCard({ stream }: StreamCardProps) {
         )}
 
         {/* Add to Playlist button */}
-        {playlists.length > 0 && (
-          <div className="absolute top-2 right-2" ref={menuRef}>
-            <button
-              onClick={handlePlaylistClick}
-              className="p-1.5 rounded-full bg-background/60 backdrop-blur-sm text-muted-foreground hover:text-primary hover:bg-background/80 transition-colors opacity-0 group-hover:opacity-100"
-              title={t.playlists.addTo}
-            >
-              <ListPlus className="w-4 h-4" />
-            </button>
+        {(playlists.length > 0 || isUpcoming) && (
+          <div className="absolute top-2 right-2 flex items-center gap-2" ref={menuRef}>
+            {isUpcoming && (
+              <button
+                onClick={handleReminderClick}
+                className={`p-1.5 rounded-full backdrop-blur-sm transition-colors opacity-0 group-hover:opacity-100 ${
+                  reminderEnabled
+                    ? "bg-primary text-primary-foreground"
+                    : "bg-background/60 text-muted-foreground hover:text-primary hover:bg-background/80"
+                }`}
+                title={t.reminders.toggle}
+              >
+                {reminderEnabled ? <BellRing className="w-4 h-4" /> : <Bell className="w-4 h-4" />}
+              </button>
+            )}
+            {playlists.length > 0 && (
+              <button
+                onClick={handlePlaylistClick}
+                className="p-1.5 rounded-full bg-background/60 backdrop-blur-sm text-muted-foreground hover:text-primary hover:bg-background/80 transition-colors opacity-0 group-hover:opacity-100"
+                title={t.playlists.addTo}
+              >
+                <ListPlus className="w-4 h-4" />
+              </button>
+            )}
             {menuOpen && (
               <div className="absolute right-0 top-full mt-1 w-48 rounded-md border border-border bg-popover shadow-lg z-50 py-1">
                 {playlists.map((pl) => {

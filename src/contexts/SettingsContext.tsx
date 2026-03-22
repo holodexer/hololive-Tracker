@@ -6,10 +6,27 @@ export interface VideoMeta {
   channelName: string;
 }
 
+export interface RecentVideoMeta {
+  id: string;
+  title: string;
+  channelName: string;
+  thumbnail?: string;
+  status?: "live" | "upcoming" | "past";
+  watchedAt: string;
+}
+
 export interface Playlist {
   id: string;
   name: string;
   videoIds: string[];
+}
+
+export interface StreamReminder {
+  videoId: string;
+  title: string;
+  channelName: string;
+  scheduledFor: string;
+  notifiedAt?: string;
 }
 
 interface SettingsState {
@@ -24,6 +41,8 @@ interface SettingsState {
   clipLanguages: string[];
   playlists: Playlist[];
   videoMeta: Record<string, VideoMeta>;
+  recentVideos: RecentVideoMeta[];
+  reminders: StreamReminder[];
 }
 
 interface SettingsContextValue extends SettingsState {
@@ -45,6 +64,10 @@ interface SettingsContextValue extends SettingsState {
   exportConfig: () => string;
   importConfig: (json: string) => boolean;
   getVideoMeta: (videoId: string) => VideoMeta | undefined;
+  recordRecentVideo: (video: Omit<RecentVideoMeta, "watchedAt"> & { watchedAt?: string }) => void;
+  toggleReminder: (reminder: Omit<StreamReminder, "notifiedAt">) => void;
+  hasReminder: (videoId: string) => boolean;
+  markReminderNotified: (videoId: string, notifiedAt?: string) => void;
   t: TranslationKeys;
 }
 
@@ -62,6 +85,8 @@ const defaultSettings: SettingsState = {
   clipLanguages: ["en"],
   playlists: [],
   videoMeta: {},
+  recentVideos: [],
+  reminders: [],
 };
 
 function loadSettings(): SettingsState {
@@ -174,6 +199,48 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
 
   const getVideoMeta = useCallback((videoId: string) => state.videoMeta[videoId], [state.videoMeta]);
 
+  const recordRecentVideo = useCallback(
+    (video: Omit<RecentVideoMeta, "watchedAt"> & { watchedAt?: string }) => {
+      setState((s) => {
+        const nextVideo: RecentVideoMeta = {
+          ...video,
+          watchedAt: video.watchedAt ?? new Date().toISOString(),
+        };
+
+        return {
+          ...s,
+          recentVideos: [nextVideo, ...s.recentVideos.filter((entry) => entry.id !== video.id)].slice(0, 24),
+        };
+      });
+    },
+    []
+  );
+
+  const toggleReminder = useCallback((reminder: Omit<StreamReminder, "notifiedAt">) => {
+    setState((s) => {
+      const exists = s.reminders.some((entry) => entry.videoId === reminder.videoId);
+      return {
+        ...s,
+        reminders: exists
+          ? s.reminders.filter((entry) => entry.videoId !== reminder.videoId)
+          : [...s.reminders, reminder],
+      };
+    });
+  }, []);
+
+  const hasReminder = useCallback((videoId: string) => state.reminders.some((entry) => entry.videoId === videoId), [state.reminders]);
+
+  const markReminderNotified = useCallback((videoId: string, notifiedAt?: string) => {
+    setState((s) => ({
+      ...s,
+      reminders: s.reminders.map((entry) =>
+        entry.videoId === videoId
+          ? { ...entry, notifiedAt: notifiedAt ?? new Date().toISOString() }
+          : entry
+      ),
+    }));
+  }, []);
+
   const value: SettingsContextValue = {
     ...state,
     setLocale,
@@ -194,6 +261,10 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
     exportConfig,
     importConfig,
     getVideoMeta,
+    recordRecentVideo,
+    toggleReminder,
+    hasReminder,
+    markReminderNotified,
     t: translations[state.locale],
   };
 

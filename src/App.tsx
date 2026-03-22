@@ -6,6 +6,8 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { SidebarProvider } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/AppSidebar";
+import { GlobalSearch } from "@/components/GlobalSearch";
+import { ReminderWatcher } from "@/components/ReminderWatcher";
 import { SettingsProvider } from "@/contexts/SettingsContext";
 import { MultiViewProvider } from "@/contexts/MultiViewContext";
 import { CinemaOverlay, useCinema } from "@/components/CinemaOverlay";
@@ -34,6 +36,7 @@ function AppContent() {
   const [displayLocation, setDisplayLocation] = useState(location);
   const [pendingLocation, setPendingLocation] = useState(location);
   const [transitionStage, setTransitionStage] = useState<"fadeIn" | "fadeOut">("fadeIn");
+  const isSyncRoute = displayLocation.pathname === "/sync";
 
   useEffect(() => {
     // Same route (pathname) updates should be immediate to avoid needless full-page fades,
@@ -74,27 +77,39 @@ function AppContent() {
                   transitionStage === "fadeOut" ? "opacity-0" : "opacity-100"
                 )}
               >
-                <Routes location={displayLocation}>
-                  <Route path="/" element={<Index />} />
-                  <Route path="/favorites" element={<Favorites />} />
-                  <Route path="/members" element={<Members />} />
-                  <Route path="/member/:channelId" element={<MemberProfile />} />
-                  <Route path="/clips" element={<Clips />} />
-                  <Route path="/playlists" element={<Playlists />} />
-                  <Route path="/playlist/:playlistId" element={<Playlist />} />
-                  <Route path="/multi-view" element={<MultiView />} />
-                  <Route path="/sync" element={<SyncWatch />} />
-                  <Route path="*" element={<NotFound />} />
-                </Routes>
+                {/* Keep SyncWatch mounted globally so route switches do not drop realtime connection. */}
+                <div className={cn(isSyncRoute ? "block" : "hidden")}>
+                  <SyncWatch />
+                </div>
+
+                <div className={cn(isSyncRoute ? "hidden" : "block")}>
+                  <Routes location={displayLocation}>
+                    <Route path="/" element={<Index />} />
+                    <Route path="/favorites" element={<Favorites />} />
+                    <Route path="/members" element={<Members />} />
+                    <Route path="/member/:channelId" element={<MemberProfile />} />
+                    <Route path="/clips" element={<Clips />} />
+                    <Route path="/playlists" element={<Playlists />} />
+                    <Route path="/playlist/:playlistId" element={<Playlist />} />
+                    <Route path="/multi-view" element={<MultiView />} />
+                    <Route path="*" element={<NotFound />} />
+                  </Routes>
+                </div>
               </div>
             </main>
           </div>
         </div>
       </SidebarProvider>
       {isMobile && <MobileBottomNav />}
+      <GlobalSearch />
+      <ReminderWatcher />
       <MultiViewFab />
-      {cinema.videoId && (
-        <CinemaOverlay videoId={cinema.videoId} onClose={cinema.close} />
+      {cinema.payload?.videoId && (
+        <CinemaOverlay
+          videoId={cinema.payload.videoId}
+          rememberChatPreference={cinema.payload.rememberChatPreference}
+          onClose={cinema.close}
+        />
       )}
     </>
   );

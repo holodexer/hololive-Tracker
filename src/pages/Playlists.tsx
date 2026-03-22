@@ -1,6 +1,6 @@
 import { useSettings } from "@/contexts/SettingsContext";
 import { useNavigate } from "react-router-dom";
-import { ListMusic, Plus, Trash2, Pencil, Check, X } from "lucide-react";
+import { ListMusic, Plus, Trash2, Pencil, Check, X, MoreVertical } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useRef, useState } from "react";
 import {
@@ -13,7 +13,13 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { StaggerList } from "@/components/StaggerList";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { PageHeader } from "@/components/PageHeader";
 
 export default function Playlists() {
   const { playlists, createPlaylist, deletePlaylist, renamePlaylist, t } = useSettings();
@@ -46,16 +52,18 @@ export default function Playlists() {
   };
 
   return (
-    <div className="max-w-4xl mx-auto space-y-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-foreground">{t.sidebar.playlists}</h1>
-        {!showNew && (
+    <div className="max-w-6xl mx-auto space-y-6">
+      <PageHeader
+        title={t.sidebar.playlists}
+        badge={`${playlists.length} ${t.playlists.videos}`}
+        description={playlists.length === 0 ? t.playlists.empty : undefined}
+        actions={!showNew ? (
           <Button size="sm" onClick={() => setShowNew(true)}>
             <Plus className="w-4 h-4 mr-2" />
             {t.playlists.create}
           </Button>
-        )}
-      </div>
+        ) : undefined}
+      />
 
       {showNew && (
         <div className="flex gap-2">
@@ -63,6 +71,12 @@ export default function Playlists() {
             type="text"
             value={newName}
             onChange={(e) => setNewName(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && !composingRef.current) handleCreate();
+              if (e.key === "Escape") { setShowNew(false); setNewName(""); }
+            }}
+            onCompositionStart={() => { composingRef.current = true; }}
+            onCompositionEnd={() => { composingRef.current = false; }}
             placeholder={t.playlists.namePlaceholder}
             className="flex-1 text-sm px-3 py-2 rounded-md bg-background border border-input text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
             autoFocus
@@ -82,7 +96,7 @@ export default function Playlists() {
           <p>{t.playlists.empty}</p>
         </div>
       ) : (
-        <StaggerList className="space-y-2" itemClassName="stagger-reveal">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {playlists.map((pl) => {
             const coverThumb = pl.videoIds.length > 0
               ? `https://i.ytimg.com/vi/${pl.videoIds[0]}/mqdefault.jpg`
@@ -90,74 +104,81 @@ export default function Playlists() {
             const isEditing = editingId === pl.id;
 
             return (
-              <div
-                key={pl.id}
-                className="flex items-center gap-4 w-full p-4 rounded-lg bg-card border border-border hover:border-primary/40 transition-colors group"
-              >
-                <button
+              <div key={pl.id} className="group flex flex-col gap-1.5">
+                {/* Thumbnail card */}
+                <div
+                  className="relative aspect-video rounded-xl overflow-hidden bg-muted cursor-pointer"
                   onClick={() => !isEditing && navigate(`/playlist/${pl.id}`)}
-                  className="flex items-center gap-4 flex-1 min-w-0 text-left"
                 >
                   {coverThumb ? (
-                    <img src={coverThumb} alt={pl.name} className="w-16 aspect-video rounded-md object-cover shrink-0" />
+                    <img src={coverThumb} alt={pl.name} className="w-full h-full object-cover" loading="lazy" />
                   ) : (
-                    <ListMusic className="w-6 h-6 text-primary shrink-0" />
+                    <div className="w-full h-full flex items-center justify-center">
+                      <ListMusic className="w-10 h-10 text-muted-foreground" />
+                    </div>
                   )}
-                  <div className="flex-1 min-w-0">
-                    {isEditing ? (
-                      <div className="flex gap-2 items-center" onClick={(e) => e.stopPropagation()}>
-                        <input
-                          type="text"
-                          value={editName}
-                          onChange={(e) => setEditName(e.target.value)}
-                          onKeyDown={(e) => {
-                            if (e.key === "Escape") setEditingId(null);
-                          }}
-                          className="flex-1 text-sm px-2 py-1 rounded-md bg-background border border-input text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-                          autoFocus
-                        />
-                        <Button size="icon" variant="ghost" className="h-7 w-7" onClick={(e) => { e.stopPropagation(); handleRename(pl.id); }}>
-                          <Check className="w-4 h-4 text-primary" />
-                        </Button>
-                        <Button size="icon" variant="ghost" className="h-7 w-7" onClick={(e) => { e.stopPropagation(); setEditingId(null); }}>
-                          <X className="w-4 h-4" />
-                        </Button>
-                      </div>
-                    ) : (
-                      <>
-                        <p className="font-medium text-foreground truncate">{pl.name}</p>
-                        <p className="text-xs text-muted-foreground">
-                          {pl.videoIds.length} {t.playlists.videos}
-                        </p>
-                      </>
-                    )}
+                  {/* Bottom overlay: name + count */}
+                  <div className="absolute bottom-0 inset-x-0 bg-gradient-to-t from-black/80 to-transparent px-3 pt-6 pb-2 flex items-end justify-between gap-2">
+                    <p className="text-sm font-semibold text-white line-clamp-1 flex-1 min-w-0">{pl.name}</p>
+                    <div className="flex items-center gap-1 shrink-0">
+                      <ListMusic className="w-3 h-3 text-white/80" />
+                      <span className="text-xs text-white/80 font-medium">
+                        {pl.videoIds.length} {t.playlists.videos}
+                      </span>
+                    </div>
                   </div>
-                </button>
+                  {/* Top-right ⋮ menu */}
+                  {!isEditing && (
+                    <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity" onClick={(e) => e.stopPropagation()}>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="secondary" size="icon" className="h-7 w-7 bg-black/60 hover:bg-black/80 border-0 text-white">
+                            <MoreVertical className="w-4 h-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem onClick={() => startEdit(pl.id, pl.name)}>
+                            <Pencil className="w-4 h-4 mr-2" />
+                            {t.playlists.rename}
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            className="text-destructive focus:text-destructive"
+                            onClick={() => setDeleteTarget(pl.id)}
+                          >
+                            <Trash2 className="w-4 h-4 mr-2" />
+                            {t.common.delete}
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </div>
+                  )}
+                </div>
 
-                {!isEditing && (
-                  <div className="flex gap-1 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-8 w-8 text-muted-foreground hover:text-primary"
-                      onClick={(e) => { e.stopPropagation(); startEdit(pl.id, pl.name); }}
-                    >
-                      <Pencil className="w-4 h-4" />
+                {/* Inline rename input (only shown when editing) */}
+                {isEditing && (
+                  <div className="flex gap-1 items-center px-1">
+                    <input
+                      type="text"
+                      value={editName}
+                      onChange={(e) => setEditName(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Escape") setEditingId(null);
+                      }}
+                      className="flex-1 text-sm px-2 py-1 rounded bg-background border border-input text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                      autoFocus
+                    />
+                    <Button size="icon" variant="ghost" className="h-7 w-7 shrink-0" onClick={() => handleRename(pl.id)}>
+                      <Check className="w-3.5 h-3.5 text-primary" />
                     </Button>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-8 w-8 text-muted-foreground hover:text-destructive"
-                      onClick={(e) => { e.stopPropagation(); setDeleteTarget(pl.id); }}
-                    >
-                      <Trash2 className="w-4 h-4" />
+                    <Button size="icon" variant="ghost" className="h-7 w-7 shrink-0" onClick={() => setEditingId(null)}>
+                      <X className="w-3.5 h-3.5" />
                     </Button>
                   </div>
                 )}
               </div>
             );
           })}
-        </StaggerList>
+        </div>
       )}
 
       {/* Delete confirmation */}
