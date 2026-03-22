@@ -69,8 +69,9 @@ export default function SyncWatch() {
 
   const roomParam = searchParams.get("room");
   const savedSession = useRef(loadSession()).current;
+  const initialRoomCandidate = useRef(roomParam ?? savedSession?.roomId ?? null).current;
 
-  const initialRoom = roomParam ?? savedSession?.roomId ?? null;
+  const initialRoom = initialRoomCandidate;
   // Don't restore host from session — it's calculated dynamically from presence
   const initialHost = roomParam ? false : !savedSession;
 
@@ -81,7 +82,7 @@ export default function SyncWatch() {
   const [currentVideoId, setCurrentVideoId] = useState<string | null>(null);
   const [joinInput, setJoinInput] = useState("");
   const [isJoiningRoom, setIsJoiningRoom] = useState(false);
-  const [isValidatingInitialRoom, setIsValidatingInitialRoom] = useState(Boolean(roomParam));
+  const [isValidatingInitialRoom, setIsValidatingInitialRoom] = useState(Boolean(initialRoomCandidate && !initialHost));
   const [sidebarTab, setSidebarTab] = useState<"members" | "chat" | "log" | "queue">("members");
   const [countdown, setCountdown] = useState<{ videoId: string; title?: string } | null>(null);
   const [mobileSection, setMobileSection] = useState<"sidebar" | "collapsed">("sidebar");
@@ -191,12 +192,12 @@ export default function SyncWatch() {
   }, [roomId, username]);
 
   useEffect(() => {
-    if (!roomParam) {
+    if (!initialRoomCandidate || initialHost) {
       setIsValidatingInitialRoom(false);
       return;
     }
 
-    if (isHost || roomId !== roomParam) {
+    if (isHost || roomId !== initialRoomCandidate) {
       setIsValidatingInitialRoom(false);
       return;
     }
@@ -204,7 +205,7 @@ export default function SyncWatch() {
     let cancelled = false;
     setIsValidatingInitialRoom(true);
 
-    validateRoomExists(roomParam)
+    validateRoomExists(initialRoomCandidate)
       .then((exists) => {
         if (cancelled) return;
         if (!exists) {
@@ -232,7 +233,7 @@ export default function SyncWatch() {
     return () => {
       cancelled = true;
     };
-  }, [isHost, roomId, roomParam, setSearchParams, t.sync.roomNotFound, t.sync.roomValidationError]);
+  }, [initialHost, initialRoomCandidate, isHost, roomId, setSearchParams, t.sync.roomNotFound, t.sync.roomValidationError]);
 
   // When switching away from YouTube, destroy the player (container stays in DOM).
   useEffect(() => {
