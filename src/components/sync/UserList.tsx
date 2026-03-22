@@ -18,6 +18,23 @@ const localeLabels = {
   ja: { allowGuest: "ゲスト操作を許可", host: "ホスト", guest: "ゲスト", youIndicator: "（あなた）" },
 };
 
+function getUserAccent(nickname: string) {
+  let hash = 0;
+  for (let index = 0; index < nickname.length; index += 1) {
+    hash = nickname.charCodeAt(index) + ((hash << 5) - hash);
+  }
+
+  const hue = Math.abs(hash) % 360;
+  return {
+    backgroundColor: `hsl(${hue} 70% 45%)`,
+    boxShadow: `0 0 0 1px hsl(${hue} 70% 55% / 0.35) inset`,
+  };
+}
+
+function getInitial(nickname: string) {
+  return nickname.trim().charAt(0).toUpperCase() || "?";
+}
+
 export function UserList({ peers, myPeerId, amIHost, guestControlEnabled, onToggleGuestControl, locale = "en" }: UserListProps) {
   const l = localeLabels[locale];
 
@@ -32,11 +49,27 @@ export function UserList({ peers, myPeerId, amIHost, guestControlEnabled, onTogg
             key={peer.odataId}
             className="flex items-center gap-2.5 rounded-md border border-border/30 bg-card/50 px-3 py-2.5"
           >
-            {peer.isHost ? (
-              <Crown className="w-3.5 h-3.5 text-primary shrink-0" />
-            ) : (
-              <div className="w-3.5 h-3.5 rounded-full bg-muted shrink-0" />
-            )}
+            <div className="relative shrink-0">
+              {peer.avatar ? (
+                <img
+                  src={peer.avatar}
+                  alt={peer.nickname}
+                  className="h-8 w-8 rounded-full object-cover"
+                />
+              ) : (
+                <div
+                  className="flex h-8 w-8 items-center justify-center rounded-full text-[11px] font-semibold text-white"
+                  style={getUserAccent(peer.nickname)}
+                >
+                  {getInitial(peer.nickname)}
+                </div>
+              )}
+              {peer.isHost && (
+                <div className="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-background border border-border/60">
+                  <Crown className="w-2.5 h-2.5 text-primary" />
+                </div>
+              )}
+            </div>
             <span className="text-sm text-foreground truncate flex-1">
               {peer.nickname}
               {isMe && <span className="text-muted-foreground ml-1">{l.youIndicator}</span>}

@@ -27,12 +27,12 @@ export function CinemaOverlay({ videoId, onClose }: CinemaOverlayProps) {
       onClick={onClose}
     >
       <div
-        className="relative w-full max-w-6xl mx-4 flex flex-col"
+        className="relative w-full max-w-[1380px] mx-4"
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Header bar */}
-        <div className="flex items-center justify-between mb-3">
-          <div className="flex items-center gap-3">
+        {/* Floating controls — absolute on top of content, no layout impact */}
+        <div className="absolute -top-10 inset-x-0 flex items-center justify-between z-10 pointer-events-none">
+          <div className="flex items-center gap-3 pointer-events-auto">
             <MessageSquare className="w-4 h-4 text-muted-foreground" />
             <label
               htmlFor="chat-toggle"
@@ -48,7 +48,7 @@ export function CinemaOverlay({ videoId, onClose }: CinemaOverlayProps) {
           </div>
           <button
             onClick={onClose}
-            className="p-2 text-muted-foreground hover:text-foreground transition-colors"
+            className="p-2 text-muted-foreground hover:text-foreground transition-colors pointer-events-auto"
           >
             <X className="w-5 h-5" />
           </button>
@@ -81,7 +81,7 @@ export function CinemaOverlay({ videoId, onClose }: CinemaOverlayProps) {
               showChat
                 ? isMobile
                   ? "w-full h-[300px] opacity-100 mt-3 border border-border/50"
-                  : "w-[370px] shrink-0 opacity-100 ml-3 border border-border/50"
+                : "w-[300px] shrink-0 opacity-100 ml-3 border border-border/50"
                 : isMobile
                   ? "w-full h-0 opacity-0 overflow-hidden"
                   : "w-0 opacity-0 overflow-hidden"

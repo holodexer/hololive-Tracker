@@ -9,10 +9,11 @@ import { VideoQueue } from "@/components/sync/VideoQueue";
 import { ClipsOverlay } from "@/components/sync/ClipsOverlay";
 import { cn } from "@/lib/utils";
 import { useSettings } from "@/contexts/SettingsContext";
+import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { NicknameModal } from "@/components/sync/NicknameModal";
 import { UserList } from "@/components/sync/UserList";
-import { ChatPanel } from "@/components/sync/ChatPanel";
+
 import { SystemMessages } from "@/components/sync/SystemMessages";
 import { QueueCountdown } from "@/components/sync/QueueCountdown";
 import { deserializeMedia, parseMediaInput, serializeMedia } from "@/lib/mediaSource";
@@ -42,7 +43,6 @@ const SESSION_KEY = "sync-watch-session";
 
 interface SessionData {
   roomId: string;
-  nickname: string;
 }
 
 function saveSession(data: SessionData) {
@@ -65,7 +65,7 @@ function clearSession() {
 export default function SyncWatch() {
   const [searchParams, setSearchParams] = useSearchParams();
   const isMobile = useIsMobile();
-  const { locale, t } = useSettings();
+  const { locale, t, username, avatar, setUsername } = useSettings();
 
   const roomParam = searchParams.get("room");
   const savedSession = useRef(loadSession()).current;
@@ -73,15 +73,15 @@ export default function SyncWatch() {
   const initialRoom = roomParam ?? savedSession?.roomId ?? null;
   // Don't restore host from session — it's calculated dynamically from presence
   const initialHost = roomParam ? false : !savedSession;
-  const initialNickname = savedSession?.nickname ?? "";
 
   const [roomId, setRoomId] = useState<string | null>(initialRoom);
   const [isHost, setIsHost] = useState(initialHost);
-  const [nickname, setNickname] = useState(initialNickname);
-  const [needsNickname, setNeedsNickname] = useState(!initialNickname && !!initialRoom);
+  const [needsNickname, setNeedsNickname] = useState(!username && !!initialRoom);
   const [videoInput, setVideoInput] = useState("");
   const [currentVideoId, setCurrentVideoId] = useState<string | null>(null);
   const [joinInput, setJoinInput] = useState("");
+  const [isJoiningRoom, setIsJoiningRoom] = useState(false);
+  const [isValidatingInitialRoom, setIsValidatingInitialRoom] = useState(Boolean(roomParam));
   const [sidebarTab, setSidebarTab] = useState<"members" | "chat" | "log" | "queue">("members");
   const [countdown, setCountdown] = useState<{ videoId: string; title?: string } | null>(null);
   const [mobileSection, setMobileSection] = useState<"sidebar" | "collapsed">("sidebar");
@@ -109,12 +109,12 @@ export default function SyncWatch() {
 
   const {
     syncState, peers, peerCount, lastEvent, guestControlEnabled,
-    chatMessages, systemMessages, canControl, amIHost, myPeerId,
+    systemMessages, canControl, amIHost, myPeerId,
     broadcastSync, broadcastVideoChange, toggleGuestControl,
-    sendChatMessage, onSyncRequestRef, notifyPlayerReady, resetState,
+    onSyncRequestRef, notifyPlayerReady, resetState,
     queue, addToQueue, removeFromQueue, moveInQueue, playFromQueue, playNextFromQueue,
     SYNC_THRESHOLD,
-  } = useSyncWatch({ roomId: needsNickname ? null : roomId, nickname, isHost });
+  } = useSyncWatch({ roomId: needsNickname || isValidatingInitialRoom ? null : roomId, nickname: username, avatar, isHost });
 
   const effectiveHost = amIHost || (isHost && peerCount <= 1);
   useEffect(() => { effectiveHostRef.current = effectiveHost; }, [effectiveHost]);
@@ -185,10 +185,54 @@ export default function SyncWatch() {
 
   // Persist session (no host status stored)
   useEffect(() => {
-    if (roomId && nickname) {
-      saveSession({ roomId, nickname });
+    if (roomId && username) {
+      saveSession({ roomId });
     }
-  }, [roomId, nickname]);
+  }, [roomId, username]);
+
+  useEffect(() => {
+    if (!roomParam) {
+      setIsValidatingInitialRoom(false);
+      return;
+    }
+
+    if (isHost || roomId !== roomParam) {
+      setIsValidatingInitialRoom(false);
+      return;
+    }
+
+    let cancelled = false;
+    setIsValidatingInitialRoom(true);
+
+    validateRoomExists(roomParam)
+      .then((exists) => {
+        if (cancelled) return;
+        if (!exists) {
+          toast.error(t.sync.roomNotFound);
+          clearSession();
+          setNeedsNickname(false);
+          setRoomId(null);
+          setSearchParams({});
+        }
+      })
+      .catch(() => {
+        if (cancelled) return;
+        toast.error(t.sync.roomValidationError);
+        clearSession();
+        setNeedsNickname(false);
+        setRoomId(null);
+        setSearchParams({});
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setIsValidatingInitialRoom(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isHost, roomId, roomParam, setSearchParams, t.sync.roomNotFound, t.sync.roomValidationError]);
 
   // When switching away from YouTube, destroy the player (container stays in DOM).
   useEffect(() => {
@@ -338,7 +382,7 @@ export default function SyncWatch() {
   }, [syncState, effectiveHost, currentVideoId, guestControlEnabled]);
 
   const handleCreateRoom = useCallback(() => {
-    if (!nickname) {
+    if (!username.trim()) {
       setNeedsNickname(true);
       return;
     }
@@ -346,19 +390,36 @@ export default function SyncWatch() {
     setRoomId(id);
     setIsHost(true);
     setSearchParams({ room: id });
-  }, [setSearchParams, nickname]);
+  }, [setSearchParams, username]);
 
   const handleJoinRoom = useCallback(() => {
     const id = joinInput.trim();
-    if (!id) return;
-    setRoomId(id);
-    setIsHost(false);
-    setSearchParams({ room: id });
-    if (!nickname) setNeedsNickname(true);
-  }, [joinInput, setSearchParams, nickname]);
+    if (!id || isJoiningRoom) return;
+
+    setIsJoiningRoom(true);
+
+    validateRoomExists(id)
+      .then((exists) => {
+        if (!exists) {
+          toast.error(t.sync.roomNotFound);
+          return;
+        }
+
+        setRoomId(id);
+        setIsHost(false);
+        setSearchParams({ room: id });
+        if (!username.trim()) setNeedsNickname(true);
+      })
+      .catch(() => {
+        toast.error(t.sync.roomValidationError);
+      })
+      .finally(() => {
+        setIsJoiningRoom(false);
+      });
+  }, [isJoiningRoom, joinInput, setSearchParams, t.sync.roomNotFound, t.sync.roomValidationError, username]);
 
   const handleNicknameConfirm = useCallback((name: string) => {
-    setNickname(name);
+    setUsername(name);
     setNeedsNickname(false);
     if (!roomId) {
       const id = generateRoomId();
@@ -366,7 +427,7 @@ export default function SyncWatch() {
       setIsHost(true);
       setSearchParams({ room: id });
     }
-  }, [roomId, setSearchParams]);
+  }, [roomId, setSearchParams, setUsername]);
 
   const handleLoadVideo = useCallback(() => {
     if (!effectiveHost && !guestControlEnabled) return;
@@ -422,7 +483,6 @@ export default function SyncWatch() {
     resetState();
     setRoomId(null);
     setIsHost(true);
-    setNickname("");
     setCurrentVideoId(null);
     setVideoInput("");
     setJoinInput("");
@@ -463,11 +523,11 @@ export default function SyncWatch() {
   const handleNicknameCancel = useCallback(() => {
     setNeedsNickname(false);
     setJoinInput("");
-    if (roomId && !nickname) {
+    if (roomId && !username.trim()) {
       setRoomId(null);
       setSearchParams({});
     }
-  }, [roomId, nickname, setSearchParams]);
+  }, [roomId, username, setSearchParams]);
 
   // Track player area height for sidebar max-height
   useEffect(() => {
@@ -478,6 +538,17 @@ export default function SyncWatch() {
     ro.observe(playerAreaRef.current);
     return () => ro.disconnect();
   }, [isMobile, currentVideoId]);
+
+  if (isValidatingInitialRoom) {
+    return (
+      <div className="flex items-center justify-center min-h-[60vh]">
+        <div className="text-center space-y-3">
+          <Radio className="w-10 h-10 text-primary mx-auto animate-pulse" />
+          <p className="text-sm text-muted-foreground">{t.common.loading}</p>
+        </div>
+      </div>
+    );
+  }
 
   // Nickname modal
   if (needsNickname) {
@@ -497,7 +568,7 @@ export default function SyncWatch() {
 
           <div className="space-y-4">
             <Button
-              onClick={() => { setNeedsNickname(true); setIsHost(true); }}
+              onClick={handleCreateRoom}
               className="w-full gap-2 min-h-[48px]"
               size="lg"
             >
@@ -517,9 +588,10 @@ export default function SyncWatch() {
                 value={joinInput}
                 onChange={(e) => setJoinInput(e.target.value)}
                 className="flex-1 min-h-[48px]"
+                disabled={isJoiningRoom}
               />
-              <Button onClick={handleJoinRoom} variant="secondary" className="min-h-[48px]">
-                {t.sync.join}
+              <Button onClick={handleJoinRoom} variant="secondary" className="min-h-[48px]" disabled={isJoiningRoom || !joinInput.trim()}>
+                {isJoiningRoom ? t.common.loading : t.sync.join}
               </Button>
             </div>
           </div>
@@ -592,12 +664,21 @@ export default function SyncWatch() {
             </div>
           )}
           {sidebarTab === "chat" && (
-            <div className={`h-full ${TAB_PANEL_TRANSITION_CLASS}`}>
-              <ChatPanel
-                messages={chatMessages}
-                onSend={sendChatMessage}
-                myNickname={nickname}
-              />
+            <div className={`h-full ${TAB_PANEL_TRANSITION_CLASS} flex flex-col`}>
+              {currentMedia?.source === "youtube" ? (
+                <iframe
+                  key={currentMedia.value}
+                  src={`https://www.youtube.com/live_chat?v=${currentMedia.value}&embed_domain=${window.location.hostname}`}
+                  className="w-full flex-1 border-0"
+                  allow="clipboard-write"
+                  title="YouTube Live Chat"
+                />
+              ) : (
+                <div className="flex flex-col items-center justify-center h-full gap-2 text-muted-foreground text-xs text-center p-4 opacity-60">
+                  <span>播放 YouTube 影片後</span>
+                  <span>即可顯示直播聊天室</span>
+                </div>
+              )}
             </div>
           )}
           {sidebarTab === "queue" && (
@@ -803,4 +884,57 @@ export default function SyncWatch() {
       </div>
     </div>
   );
+}
+
+async function validateRoomExists(roomId: string): Promise<boolean> {
+  const probe = supabase.channel(`sync-watch:${roomId}`);
+
+  return new Promise((resolve, reject) => {
+    let settled = false;
+
+    const finish = async (result: boolean) => {
+      if (settled) return;
+      settled = true;
+      await probe.unsubscribe();
+      resolve(result);
+    };
+
+    const fail = async () => {
+      if (settled) return;
+      settled = true;
+      await probe.unsubscribe();
+      reject(new Error("room_probe_failed"));
+    };
+
+    probe
+      .on("presence", { event: "sync" }, () => {
+        const presence = probe.presenceState();
+        const hasPeers = Object.values(presence).some((entries) => Array.isArray(entries) && entries.length > 0);
+        if (hasPeers) {
+          void finish(true);
+        }
+      })
+      .subscribe((status) => {
+        if (status === "SUBSCRIBED") {
+          const presence = probe.presenceState();
+          const hasPeers = Object.values(presence).some((entries) => Array.isArray(entries) && entries.length > 0);
+
+          if (hasPeers) {
+            void finish(true);
+            return;
+          }
+
+          window.setTimeout(() => {
+            const latestPresence = probe.presenceState();
+            const stillHasPeers = Object.values(latestPresence).some((entries) => Array.isArray(entries) && entries.length > 0);
+            void finish(stillHasPeers);
+          }, 1200);
+          return;
+        }
+
+        if (status === "CHANNEL_ERROR" || status === "TIMED_OUT" || status === "CLOSED") {
+          void fail();
+        }
+      });
+  });
 }

@@ -18,6 +18,7 @@ export interface QueueItem {
 export interface Peer {
   odataId: string;
   nickname: string;
+  avatar?: string;
   isHost: boolean;
   joinedAt: number;
 }
@@ -38,6 +39,7 @@ export interface SystemMessage {
 interface UseSyncWatchOptions {
   roomId: string | null;
   nickname: string;
+  avatar?: string;
   isHost: boolean;
 }
 
@@ -54,7 +56,7 @@ function generatePeerId(): string {
   return Math.random().toString(36).slice(2, 10);
 }
 
-export function useSyncWatch({ roomId, nickname, isHost }: UseSyncWatchOptions) {
+export function useSyncWatch({ roomId, nickname, avatar, isHost }: UseSyncWatchOptions) {
   const channelRef = useRef<RealtimeChannel | null>(null);
   const peerIdRef = useRef(generatePeerId());
 
@@ -203,6 +205,7 @@ export function useSyncWatch({ roomId, nickname, isHost }: UseSyncWatchOptions) 
             peerList.push({
               odataId: entry.peerId,
               nickname: entry.nickname,
+              avatar: typeof entry.avatar === "string" ? entry.avatar : undefined,
               isHost: entry.isHost,
               joinedAt: entry.joinedAt,
             });
@@ -228,6 +231,7 @@ export function useSyncWatch({ roomId, nickname, isHost }: UseSyncWatchOptions) 
           await channel.track({
             peerId,
             nickname,
+            avatar,
             isHost,
             joinedAt: Date.now(),
           });
@@ -250,7 +254,7 @@ export function useSyncWatch({ roomId, nickname, isHost }: UseSyncWatchOptions) 
       channel.unsubscribe();
       channelRef.current = null;
     };
-  }, [roomId, nickname]);
+  }, [roomId, nickname, avatar]);
 
   const broadcast = useCallback(
     (event: string, payload: any) => {

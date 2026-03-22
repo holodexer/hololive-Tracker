@@ -15,6 +15,8 @@ export interface Playlist {
 interface SettingsState {
   locale: Locale;
   theme: "dark" | "light";
+  username: string;
+  avatar: string;
   directYoutube: boolean;
   favorites: string[];
   hideInactive: boolean;
@@ -27,6 +29,8 @@ interface SettingsState {
 interface SettingsContextValue extends SettingsState {
   setLocale: (l: Locale) => void;
   setTheme: (t: "dark" | "light") => void;
+  setUsername: (value: string) => void;
+  setAvatar: (value: string) => void;
   setDirectYoutube: (v: boolean) => void;
   toggleFavorite: (channelId: string) => void;
   isFavorite: (channelId: string) => boolean;
@@ -49,6 +53,8 @@ const STORAGE_KEY = "hololive-tracker-settings";
 const defaultSettings: SettingsState = {
   locale: "en",
   theme: "dark",
+  username: "",
+  avatar: "",
   directYoutube: false,
   favorites: [],
   hideInactive: false,
@@ -86,6 +92,8 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
 
   const setLocale = useCallback((locale: Locale) => setState((s) => ({ ...s, locale })), []);
   const setTheme = useCallback((theme: "dark" | "light") => setState((s) => ({ ...s, theme })), []);
+  const setUsername = useCallback((username: string) => setState((s) => ({ ...s, username })), []);
+  const setAvatar = useCallback((avatar: string) => setState((s) => ({ ...s, avatar })), []);
   const setDirectYoutube = useCallback((directYoutube: boolean) => setState((s) => ({ ...s, directYoutube })), []);
   const toggleFavorite = useCallback(
     (channelId: string) =>
@@ -170,6 +178,8 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
     ...state,
     setLocale,
     setTheme,
+    setUsername,
+    setAvatar,
     setDirectYoutube,
     toggleFavorite,
     isFavorite,

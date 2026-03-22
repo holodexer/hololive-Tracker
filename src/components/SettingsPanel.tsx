@@ -1,10 +1,11 @@
 import { useSettings } from "@/contexts/SettingsContext";
-import { Settings, Globe, Moon, Sun, Monitor, Filter, Languages, Download, Upload } from "lucide-react";
+import { Settings, Globe, Moon, Sun, Monitor, Filter, Languages, Download, Upload, User, ImagePlus, Trash2 } from "lucide-react";
 import { useState, useRef, useEffect } from "react";
 import { createPortal } from "react-dom";
 import type { Locale } from "@/lib/i18n";
 import { Switch } from "@/components/ui/switch";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
 
 const localeLabels: Record<Locale, string> = {
@@ -19,19 +20,34 @@ const clipLangOptions = [
   { value: "zh", label: "中文" },
 ];
 
-type SettingsTab = "general" | "filter" | "backup";
+type SettingsTab = "user" | "general" | "filter" | "backup";
 
 export function SettingsPanel({ collapsed = false, externalOpen, onExternalOpenChange }: { collapsed?: boolean; externalOpen?: boolean; onExternalOpenChange?: (open: boolean) => void }) {
   const [internalOpen, setInternalOpen] = useState(false);
   const open = externalOpen !== undefined ? externalOpen : internalOpen;
   const setOpen = onExternalOpenChange || setInternalOpen;
-  const [activeTab, setActiveTab] = useState<SettingsTab>("general");
+  const [activeTab, setActiveTab] = useState<SettingsTab>("user");
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const avatarInputRef = useRef<HTMLInputElement>(null);
   const {
-    locale, theme, directYoutube, hideInactive, hidePrivateVideos, clipLanguages,
-    setLocale, setTheme, setDirectYoutube, setHideInactive, setHidePrivateVideos, toggleClipLanguage,
+    locale, theme, username, avatar, directYoutube, hideInactive, hidePrivateVideos, clipLanguages,
+    setLocale, setTheme, setUsername, setAvatar, setDirectYoutube, setHideInactive, setHidePrivateVideos, toggleClipLanguage,
     exportConfig, importConfig, t,
   } = useSettings();
+
+  const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    try {
+      const nextAvatar = await resizeImageToDataUrl(file, 160);
+      setAvatar(nextAvatar);
+    } catch {
+      toast.error(t.settings.avatarError);
+    }
+
+    if (avatarInputRef.current) avatarInputRef.current.value = "";
+  };
 
   // Scroll lock when settings is open
   useEffect(() => {
@@ -74,6 +90,7 @@ export function SettingsPanel({ collapsed = false, externalOpen, onExternalOpenC
   };
 
   const tabs: { key: SettingsTab; label: string }[] = [
+    { key: "user", label: t.settings.tabUser },
     { key: "general", label: t.settings.tabGeneral },
     { key: "filter", label: t.settings.tabFilter },
     { key: "backup", label: t.settings.tabBackup },
@@ -122,6 +139,67 @@ export function SettingsPanel({ collapsed = false, externalOpen, onExternalOpenC
                 </button>
               ))}
             </div>
+
+            {/* User Tab */}
+            {activeTab === "user" && (
+              <div className="space-y-5">
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+                    <User className="w-4 h-4" />
+                    {t.settings.username}
+                  </label>
+                  <Input
+                    value={username}
+                    onChange={(e) => setUsername(e.target.value.slice(0, 20))}
+                    placeholder={t.settings.usernamePlaceholder}
+                    maxLength={20}
+                  />
+                  <p className="text-xs text-muted-foreground">{t.settings.usernameDesc}</p>
+                </div>
+
+                <div className="space-y-3">
+                  <label className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+                    <ImagePlus className="w-4 h-4" />
+                    {t.settings.avatar}
+                  </label>
+                  <div className="flex items-center gap-4 rounded-lg border border-border/50 bg-card/40 p-4">
+                    {avatar ? (
+                      <img src={avatar} alt={username || "User avatar"} className="h-16 w-16 rounded-full object-cover" />
+                    ) : (
+                      <div className="flex h-16 w-16 items-center justify-center rounded-full bg-muted text-lg font-semibold text-muted-foreground">
+                        {(username.trim().charAt(0) || "?").toUpperCase()}
+                      </div>
+                    )}
+                    <div className="flex flex-1 flex-wrap gap-2">
+                      <input
+                        ref={avatarInputRef}
+                        type="file"
+                        accept="image/png,image/jpeg,image/webp"
+                        onChange={handleAvatarUpload}
+                        className="hidden"
+                      />
+                      <button
+                        onClick={() => avatarInputRef.current?.click()}
+                        className="inline-flex items-center gap-2 rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
+                      >
+                        <ImagePlus className="w-4 h-4" />
+                        {t.settings.avatarUpload}
+                      </button>
+                      {avatar && (
+                        <button
+                          onClick={() => setAvatar("")}
+                          className="inline-flex items-center gap-2 rounded-md bg-secondary px-3 py-2 text-sm font-medium text-secondary-foreground transition-colors hover:bg-muted"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                          {t.common.delete}
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                  <p className="text-xs text-muted-foreground">{t.settings.avatarDesc}</p>
+                </div>
+              </div>
+            )}
 
             {/* General Tab */}
             {activeTab === "general" && (
@@ -293,4 +371,34 @@ export function SettingsPanel({ collapsed = false, externalOpen, onExternalOpenC
       )}
     </>
   );
+}
+
+function resizeImageToDataUrl(file: File, maxSize: number): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+
+    reader.onerror = () => reject(new Error("read_failed"));
+    reader.onload = () => {
+      const image = new Image();
+      image.onerror = () => reject(new Error("image_failed"));
+      image.onload = () => {
+        const scale = Math.min(maxSize / image.width, maxSize / image.height, 1);
+        const width = Math.max(1, Math.round(image.width * scale));
+        const height = Math.max(1, Math.round(image.height * scale));
+        const canvas = document.createElement("canvas");
+        canvas.width = width;
+        canvas.height = height;
+        const context = canvas.getContext("2d");
+        if (!context) {
+          reject(new Error("canvas_failed"));
+          return;
+        }
+        context.drawImage(image, 0, 0, width, height);
+        resolve(canvas.toDataURL("image/jpeg", 0.88));
+      };
+      image.src = String(reader.result);
+    };
+
+    reader.readAsDataURL(file);
+  });
 }
