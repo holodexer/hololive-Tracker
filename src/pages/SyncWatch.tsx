@@ -516,7 +516,9 @@ export default function SyncWatch() {
   }, [effectiveHost, guestControlEnabled, playFromQueue, broadcastVideoChange]);
 
   const copyInviteLink = useCallback(() => {
-    const url = `${window.location.origin}/sync?room=${roomId}`;
+    const basePath = import.meta.env.BASE_URL || "/";
+    const normalizedBase = basePath.endsWith("/") ? basePath : `${basePath}/`;
+    const url = `${window.location.origin}${normalizedBase}#/sync?room=${roomId}`;
     navigator.clipboard.writeText(url);
     toast.success(locale === "zh-TW" ? "已複製邀請連結！" : locale === "ja" ? "招待リンクをコピーしました！" : "Invite link copied!");
   }, [roomId, locale]);
