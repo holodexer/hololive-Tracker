@@ -1,8 +1,16 @@
 import React, { createContext, useContext, useState, useCallback } from "react";
 
+export interface SelectedStream {
+  videoId: string;
+  channelId: string;
+  channelName: string;
+  viewers?: number;
+}
+
 interface MultiViewContextValue {
   selectedIds: string[];
-  toggle: (videoId: string) => void;
+  selectedStreams: SelectedStream[];
+  toggle: (videoId: string, streamInfo?: Omit<SelectedStream, "videoId">) => void;
   isSelected: (videoId: string) => boolean;
   clear: () => void;
 }
@@ -10,27 +18,33 @@ interface MultiViewContextValue {
 const MultiViewContext = createContext<MultiViewContextValue | null>(null);
 
 export function MultiViewProvider({ children }: { children: React.ReactNode }) {
-  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [selectedStreams, setSelectedStreams] = useState<SelectedStream[]>([]);
 
-  const toggle = useCallback((videoId: string) => {
-    setSelectedIds((prev) =>
-      prev.includes(videoId)
-        ? prev.filter((id) => id !== videoId)
-        : prev.length < 4
-        ? [...prev, videoId]
-        : prev
-    );
+  const toggle = useCallback((videoId: string, streamInfo?: Omit<SelectedStream, "videoId">) => {
+    setSelectedStreams((prev) => {
+      const exists = prev.find((s) => s.videoId === videoId);
+      if (exists) {
+        return prev.filter((s) => s.videoId !== videoId);
+      } else if (prev.length < 4 && streamInfo) {
+        return [...prev, { videoId, ...streamInfo }];
+      }
+      return prev;
+    });
   }, []);
 
   const isSelected = useCallback(
-    (videoId: string) => selectedIds.includes(videoId),
-    [selectedIds]
+    (videoId: string) => selectedStreams.some((s) => s.videoId === videoId),
+    [selectedStreams]
   );
 
-  const clear = useCallback(() => setSelectedIds([]), []);
+  const clear = useCallback(() => setSelectedStreams([]), []);
+
+  const selectedIds = selectedStreams.map((s) => s.videoId);
 
   return (
-    <MultiViewContext.Provider value={{ selectedIds, toggle, isSelected, clear }}>
+    <MultiViewContext.Provider
+      value={{ selectedIds, selectedStreams, toggle, isSelected, clear }}
+    >
       {children}
     </MultiViewContext.Provider>
   );
