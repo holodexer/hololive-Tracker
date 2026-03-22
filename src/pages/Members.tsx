@@ -4,7 +4,9 @@ import { useSettings } from "@/contexts/SettingsContext";
 import { Loader2, Heart, Search, Filter } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { Input } from "@/components/ui/input";
-import { getDisplayName } from "@/lib/utils";
+import { getDisplayName, getChannelPhotoUrl } from "@/lib/utils";
+import { LoadTransition } from "@/components/LoadTransition";
+import { StaggerList } from "@/components/StaggerList";
 
 const Members = () => {
   const { data: channels, isLoading } = useHololiveChannels();
@@ -46,11 +48,7 @@ const Members = () => {
   const favoriteChannels = vtubers.filter((ch) => isFavorite(ch.id));
 
   if (isLoading) {
-    return (
-      <div className="flex items-center justify-center min-h-[60vh]">
-        <Loader2 className="w-8 h-8 animate-spin text-primary" />
-      </div>
-    );
+    return <LoadTransition loading={true}>null</LoadTransition>;
   }
 
   return (
@@ -90,7 +88,7 @@ const Members = () => {
             <Heart className="w-5 h-5 text-pink-400 fill-current" />
             <h2 className="text-lg font-semibold text-foreground">{t.members.favorites}</h2>
           </div>
-          <div className="space-y-2">
+          <StaggerList className="space-y-2">
             {favoriteChannels.map((ch) => (
               <MemberRow
                 key={ch.id}
@@ -103,13 +101,13 @@ const Members = () => {
                 onClick={() => navigate(`/member/${ch.id}`)}
               />
             ))}
-          </div>
+          </StaggerList>
         </section>
       )}
 
       {/* All Members List (excluding favorites) */}
       <section>
-        <div className="space-y-2">
+        <StaggerList className="space-y-2">
           {filtered.map((ch) => (
             <MemberRow
               key={ch.id}
@@ -125,7 +123,7 @@ const Members = () => {
           {filtered.length === 0 && (
             <p className="text-muted-foreground text-sm py-4">{t.members.noFound}</p>
           )}
-        </div>
+        </StaggerList>
       </section>
     </div>
   );
@@ -154,8 +152,18 @@ function MemberRow({
     <div className="flex items-center gap-4 p-3 rounded-lg bg-card border border-border hover:border-primary/50 transition-colors">
       <button onClick={onClick} className="shrink-0">
         <img
-          src={channel.photo ?? ""}
+          src={getChannelPhotoUrl(channel.photo)}
           alt={name}
+          onError={(e) => {
+            const img = e.currentTarget;
+            if (!img.dataset.fallbackTried) {
+              img.dataset.fallbackTried = "1";
+              img.src = `https://unavatar.io/youtube/${channel.id}`;
+              return;
+            }
+            img.onerror = null;
+            img.src = "/channel-placeholder.svg";
+          }}
           className={`w-12 h-12 rounded-full object-cover ${
             isLive ? "ring-3 ring-live animate-pulse-live" : ""
           }`}

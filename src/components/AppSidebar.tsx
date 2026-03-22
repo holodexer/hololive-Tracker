@@ -18,7 +18,7 @@ import {
   SidebarTrigger,
   useSidebar,
 } from "@/components/ui/sidebar";
-import { getDisplayName } from "@/lib/utils";
+import { getDisplayName, getChannelPhotoUrl } from "@/lib/utils";
 
 export function AppSidebar() {
   const { state } = useSidebar();
@@ -112,8 +112,18 @@ export function AppSidebar() {
                         <button onClick={() => navigate(`/member/${ch.id}`)}>
                           <span className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-full">
                             <img
-                              src={ch.photo ?? ""}
+                              src={getChannelPhotoUrl(ch.photo)}
                               alt={name}
+                              onError={(e) => {
+                                const img = e.currentTarget;
+                                if (!img.dataset.fallbackTried) {
+                                  img.dataset.fallbackTried = "1";
+                                  img.src = `https://unavatar.io/youtube/${ch.id}`;
+                                  return;
+                                }
+                                img.onerror = null;
+                                img.src = "/channel-placeholder.svg";
+                              }}
                               className={`h-full w-full rounded-full object-cover aspect-square ${
                                 isLive ? "ring-[3px] ring-live shadow-[0_0_12px_hsl(var(--live)/0.6)] group-data-[collapsible=icon]:animate-none group-data-[collapsible=icon]:shadow-none" : ""
                               }`}

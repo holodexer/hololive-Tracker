@@ -1,6 +1,8 @@
 import { useState, useCallback, useEffect } from "react";
 import { useHolodexStreams } from "@/hooks/useHolodex";
 import { StreamCard } from "@/components/StreamCard";
+import { LoadTransition } from "@/components/LoadTransition";
+import { StaggerList } from "@/components/StaggerList";
 import { fetchHololivePastStreams, fetchHololiveClips, type HolodexVideo } from "@/lib/holodex";
 import { filterUnavailableVideos } from "@/lib/videoFilters";
 import { mixClipsByLanguage } from "@/lib/clipMixing";
@@ -8,6 +10,7 @@ import { Loader2, Radio, Archive, Film, Clock } from "lucide-react";
 import { useSettings } from "@/contexts/SettingsContext";
 import { useQuery } from "@tanstack/react-query";
 import { format } from "date-fns";
+import { TAB_PANEL_TRANSITION_CLASS } from "@/lib/transitions";
 
 const PAGE_SIZE = 50;
 
@@ -107,11 +110,7 @@ const Index = () => {
   }, [clipsPage, clipLangKey, hidePrivateVideos]);
 
   if (isLoading) {
-    return (
-      <div className="flex items-center justify-center min-h-[60vh]">
-        <Loader2 className="w-8 h-8 animate-spin text-primary" />
-      </div>
-    );
+    return <LoadTransition loading={true}>null</LoadTransition>;
   }
 
   if (error) {
@@ -169,7 +168,7 @@ const Index = () => {
       </div>
 
       {activeTab === "live" && (
-        <div className="space-y-10">
+        <div key="tab-live" className={`space-y-10 ${TAB_PANEL_TRANSITION_CLASS}`}>
           <section>
             <div className="flex items-center gap-3 mb-4">
               <h2 className="text-xl font-bold text-foreground">{t.home.liveNow}</h2>
@@ -186,11 +185,11 @@ const Index = () => {
             {sortedLive.length === 0 ? (
               <p className="text-muted-foreground">{t.favorites.noLive}</p>
             ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+              <StaggerList className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
                 {sortedLive.map((s) => (
                   <StreamCard key={s.id} stream={s} />
                 ))}
-              </div>
+              </StaggerList>
             )}
           </section>
 
@@ -231,13 +230,14 @@ const Index = () => {
                             <span className="text-sm font-mono text-primary shrink-0 mt-1 w-14">
                               {timeKey}
                             </span>
-                            <div className="flex-1 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                            <StaggerList
+                              className="flex-1 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3"
+                              itemClassName="max-w-md"
+                            >
                               {timeStreams!.map((s) => (
-                                <div key={s.id} className="max-w-md">
-                                  <StreamCard stream={s} />
-                                </div>
+                                <StreamCard key={s.id} stream={s} />
                               ))}
-                            </div>
+                            </StaggerList>
                           </div>
                         ))}
                       </div>
@@ -251,20 +251,18 @@ const Index = () => {
       )}
 
       {activeTab === "archives" && (
-        <div>
+        <div key="tab-archives" className={TAB_PANEL_TRANSITION_CLASS}>
           {archiveInitLoading ? (
-            <div className="flex justify-center py-8">
-              <Loader2 className="w-6 h-6 animate-spin text-primary" />
-            </div>
+            <LoadTransition loading={true} minHeightClassName="py-8" loaderClassName="w-6 h-6">null</LoadTransition>
           ) : archiveVideos.length === 0 ? (
             <p className="text-muted-foreground">{t.favorites.noArchives}</p>
           ) : (
             <>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+              <StaggerList className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
                 {archiveVideos.map((s) => (
                   <StreamCard key={s.id} stream={s} />
                 ))}
-              </div>
+              </StaggerList>
               {archiveHasMore && (
                 <div className="flex justify-center mt-6">
                   <button
@@ -290,20 +288,18 @@ const Index = () => {
       )}
 
       {activeTab === "clips" && (
-        <div>
+        <div key="tab-clips" className={TAB_PANEL_TRANSITION_CLASS}>
           {clipsInitLoading ? (
-            <div className="flex justify-center py-8">
-              <Loader2 className="w-6 h-6 animate-spin text-primary" />
-            </div>
+            <LoadTransition loading={true} minHeightClassName="py-8" loaderClassName="w-6 h-6">null</LoadTransition>
           ) : clipVideos.length === 0 ? (
             <p className="text-muted-foreground">{t.favorites.noClips}</p>
           ) : (
             <>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+              <StaggerList className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
                 {clipVideos.map((s) => (
                   <StreamCard key={s.id} stream={s} />
                 ))}
-              </div>
+              </StaggerList>
               {clipsHasMore && (
                 <div className="flex justify-center mt-6">
                   <button

@@ -13,6 +13,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { StaggerList } from "@/components/StaggerList";
 
 export default function Playlists() {
   const { playlists, createPlaylist, deletePlaylist, renamePlaylist, t } = useSettings();
@@ -81,7 +82,7 @@ export default function Playlists() {
           <p>{t.playlists.empty}</p>
         </div>
       ) : (
-        <div className="space-y-2">
+        <StaggerList className="space-y-2" itemClassName="stagger-reveal">
           {playlists.map((pl) => {
             const coverThumb = pl.videoIds.length > 0
               ? `https://i.ytimg.com/vi/${pl.videoIds[0]}/mqdefault.jpg`
@@ -156,7 +157,7 @@ export default function Playlists() {
               </div>
             );
           })}
-        </div>
+        </StaggerList>
       )}
 
       {/* Delete confirmation */}

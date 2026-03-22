@@ -30,7 +30,7 @@ export function UserList({ peers, myPeerId, amIHost, guestControlEnabled, onTogg
         return (
           <div
             key={peer.odataId}
-            className="flex items-center gap-2 px-2 py-1.5 rounded-md bg-card/50 border border-border/30"
+            className="flex items-center gap-2.5 rounded-md border border-border/30 bg-card/50 px-3 py-2.5"
           >
             {peer.isHost ? (
               <Crown className="w-3.5 h-3.5 text-primary shrink-0" />
@@ -41,7 +41,7 @@ export function UserList({ peers, myPeerId, amIHost, guestControlEnabled, onTogg
               {peer.nickname}
               {isMe && <span className="text-muted-foreground ml-1">{l.youIndicator}</span>}
             </span>
-            <Badge variant={peer.isHost ? "default" : "secondary"} className="text-[10px] px-1.5 py-0">
+            <Badge variant={peer.isHost ? "default" : "secondary"} className="px-1.5 py-0 text-[10px]">
               {peer.isHost ? l.host : l.guest}
             </Badge>
           </div>
@@ -49,7 +49,7 @@ export function UserList({ peers, myPeerId, amIHost, guestControlEnabled, onTogg
       })}
 
       {amIHost && (
-        <div className="flex items-center gap-2 px-2 py-2 mt-2 rounded-md bg-primary/5 border border-primary/20">
+        <div className="mt-3 flex items-center gap-2 rounded-md border border-primary/20 bg-primary/5 px-3 py-3">
           <label htmlFor="guest-ctrl-sidebar" className="text-xs text-muted-foreground select-none cursor-pointer flex-1">
             {l.allowGuest}
           </label>

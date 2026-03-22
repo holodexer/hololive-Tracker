@@ -5,10 +5,13 @@ import { fetchChannelVideos, fetchChannelClips, type HolodexVideo } from "@/lib/
 import { filterUnavailableVideos } from "@/lib/videoFilters";
 import { mixClipsByLanguage } from "@/lib/clipMixing";
 import { StreamCard } from "@/components/StreamCard";
+import { LoadTransition } from "@/components/LoadTransition";
+import { StaggerList } from "@/components/StaggerList";
 import { Heart, Loader2, Radio, Archive, Film, Clock } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { format } from "date-fns";
 import { addDays, isAfter, isBefore } from "date-fns";
+import { TAB_PANEL_TRANSITION_CLASS } from "@/lib/transitions";
 
 const PAGE_SIZE = 50;
 
@@ -199,11 +202,9 @@ export default function Favorites() {
 
       {/* Live + Upcoming Tab */}
       {activeTab === "live" && (
-        <div className="space-y-10">
+        <div key="tab-live" className={`space-y-10 ${TAB_PANEL_TRANSITION_CLASS}`}>
           {liveLoading ? (
-            <div className="flex justify-center py-20">
-              <Loader2 className="w-8 h-8 animate-spin text-primary" />
-            </div>
+            <LoadTransition loading={true} minHeightClassName="py-20">null</LoadTransition>
           ) : (
             <>
               {/* Live Now */}
@@ -223,11 +224,11 @@ export default function Favorites() {
                 {sortedFavLive.length === 0 ? (
                   <p className="text-muted-foreground">{t.favorites.noLive}</p>
                 ) : (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                  <StaggerList className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
                     {sortedFavLive.map((s) => (
                       <StreamCard key={s.id} stream={s} />
                     ))}
-                  </div>
+                  </StaggerList>
                 )}
               </section>
 
@@ -269,13 +270,14 @@ export default function Favorites() {
                                 <span className="text-sm font-mono text-primary shrink-0 mt-1 w-14">
                                   {timeKey}
                                 </span>
-                                <div className="flex-1 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                                <StaggerList
+                                  className="flex-1 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3"
+                                  itemClassName="max-w-md"
+                                >
                                   {timeStreams!.map((s) => (
-                                    <div key={s.id} className="max-w-md">
-                                      <StreamCard stream={s} />
-                                    </div>
+                                    <StreamCard key={s.id} stream={s} />
                                   ))}
-                                </div>
+                                </StaggerList>
                               </div>
                             ))}
                           </div>
@@ -292,20 +294,18 @@ export default function Favorites() {
 
       {/* Archives Tab */}
       {activeTab === "archives" && (
-        <div>
+        <div key="tab-archives" className={TAB_PANEL_TRANSITION_CLASS}>
           {archiveInitLoading ? (
-            <div className="flex justify-center py-8">
-              <Loader2 className="w-6 h-6 animate-spin text-primary" />
-            </div>
+            <LoadTransition loading={true} minHeightClassName="py-8" loaderClassName="w-6 h-6">null</LoadTransition>
           ) : archiveVideos.length === 0 ? (
             <p className="text-muted-foreground">{t.favorites.noArchives}</p>
           ) : (
             <>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+              <StaggerList className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
                 {archiveVideos.map((s) => (
                   <StreamCard key={s.id} stream={s} />
                 ))}
-              </div>
+              </StaggerList>
               {archiveHasMore && (
                 <div className="flex justify-center mt-6">
                   <button
@@ -326,20 +326,18 @@ export default function Favorites() {
 
       {/* Clips Tab */}
       {activeTab === "clips" && (
-        <div>
+        <div key="tab-clips" className={TAB_PANEL_TRANSITION_CLASS}>
           {clipsInitLoading ? (
-            <div className="flex justify-center py-8">
-              <Loader2 className="w-6 h-6 animate-spin text-primary" />
-            </div>
+            <LoadTransition loading={true} minHeightClassName="py-8" loaderClassName="w-6 h-6">null</LoadTransition>
           ) : clipVideos.length === 0 ? (
             <p className="text-muted-foreground">{t.favorites.noClips}</p>
           ) : (
             <>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+              <StaggerList className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
                 {clipVideos.map((s) => (
                   <StreamCard key={s.id} stream={s} />
                 ))}
-              </div>
+              </StaggerList>
               {clipsHasMore && (
                 <div className="flex justify-center mt-6">
                   <button

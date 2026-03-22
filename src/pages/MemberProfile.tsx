@@ -10,8 +10,11 @@ import { filterUnavailableVideos } from "@/lib/videoFilters";
 import { mixClipsByLanguage } from "@/lib/clipMixing";
 import { useSettings } from "@/contexts/SettingsContext";
 import { StreamCard } from "@/components/StreamCard";
+import { LoadTransition } from "@/components/LoadTransition";
+import { StaggerList } from "@/components/StaggerList";
 import { Loader2, Heart, ExternalLink } from "lucide-react";
-import { getDisplayName } from "@/lib/utils";
+import { getDisplayName, getChannelPhotoUrl } from "@/lib/utils";
+import { TAB_PANEL_TRANSITION_CLASS } from "@/lib/transitions";
 
 const PAGE_SIZE = 50;
 
@@ -118,11 +121,7 @@ const MemberProfile = () => {
   }, [channelId, clipsPage, clipLangKey, hidePrivateVideos]);
 
   if (isLoading || !channel) {
-    return (
-      <div className="flex items-center justify-center min-h-[60vh]">
-        <Loader2 className="w-8 h-8 animate-spin text-primary" />
-      </div>
-    );
+    return <LoadTransition loading={true}>null</LoadTransition>;
   }
 
   const displayName = getDisplayName(channel, locale);
@@ -159,8 +158,18 @@ const MemberProfile = () => {
         <div className="px-6 pb-6 -mt-12 relative z-10">
           <div className="flex items-end gap-4">
             <img
-              src={channel.photo ?? ""}
+              src={getChannelPhotoUrl(channel.photo)}
               alt={displayName}
+              onError={(e) => {
+                const img = e.currentTarget;
+                if (!img.dataset.fallbackTried) {
+                  img.dataset.fallbackTried = "1";
+                  img.src = `https://unavatar.io/youtube/${channel.id}`;
+                  return;
+                }
+                img.onerror = null;
+                img.src = "/channel-placeholder.svg";
+              }}
               className="w-24 h-24 rounded-full object-cover border-4 border-card"
             />
             <div className="flex-1 pb-1">
@@ -232,11 +241,11 @@ const MemberProfile = () => {
               </span>
             )}
           </h2>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+          <StaggerList className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
             {[...live, ...upcoming].map((s) => (
               <StreamCard key={s.id} stream={s} />
             ))}
-          </div>
+          </StaggerList>
         </section>
       )}
 
@@ -259,20 +268,18 @@ const MemberProfile = () => {
         </div>
 
         {activeTab === "past" && (
-          <div>
+          <div key="tab-past" className={TAB_PANEL_TRANSITION_CLASS}>
             {pastInitLoading ? (
-              <div className="flex justify-center py-8">
-                <Loader2 className="w-6 h-6 animate-spin text-primary" />
-              </div>
+              <LoadTransition loading={true} minHeightClassName="py-8" loaderClassName="w-6 h-6">null</LoadTransition>
             ) : pastVideos.length === 0 ? (
               <p className="text-muted-foreground">{t.profile.noStreams}</p>
             ) : (
               <>
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                <StaggerList className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
                   {pastVideos.map((s) => (
                     <StreamCard key={s.id} stream={s} />
                   ))}
-                </div>
+                </StaggerList>
                 {pastHasMore && (
                   <div className="flex justify-center mt-6">
                     <button
@@ -292,20 +299,18 @@ const MemberProfile = () => {
         )}
 
         {activeTab === "clips" && (
-          <div>
+          <div key="tab-clips" className={TAB_PANEL_TRANSITION_CLASS}>
             {clipsInitLoading ? (
-              <div className="flex justify-center py-8">
-                <Loader2 className="w-6 h-6 animate-spin text-primary" />
-              </div>
+              <LoadTransition loading={true} minHeightClassName="py-8" loaderClassName="w-6 h-6">null</LoadTransition>
             ) : clipVideos.length === 0 ? (
               <p className="text-muted-foreground">{t.profile.noClips}</p>
             ) : (
               <>
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                <StaggerList className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
                   {clipVideos.map((s) => (
                     <StreamCard key={s.id} stream={s} />
                   ))}
-                </div>
+                </StaggerList>
                 {clipsHasMore && (
                   <div className="flex justify-center mt-6">
                     <button

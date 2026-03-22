@@ -39,10 +39,10 @@ export function MobileBottomNav() {
   return (
     <>
       <nav
-        className="fixed bottom-0 inset-x-0 z-50 bg-card/95 backdrop-blur-md border-t border-border md:hidden"
+        className="fixed bottom-0 inset-x-0 z-50 border-t border-border bg-card/95 shadow-[0_-10px_30px_hsl(var(--background)/0.35)] backdrop-blur-md md:hidden"
         style={{ paddingBottom: "env(safe-area-inset-bottom, 0px)" }}
       >
-        <div className="flex items-center justify-around h-14">
+        <div className="grid grid-cols-5 items-stretch min-h-[4.5rem] px-1.5 pt-1.5">
           {navItems.map((item) => {
             const active = isActive(item.url);
             return (
@@ -50,12 +50,14 @@ export function MobileBottomNav() {
                 key={item.url}
                 onClick={() => navigate(item.url)}
                 className={cn(
-                  "flex flex-col items-center justify-center gap-0.5 flex-1 h-full min-h-[44px] transition-colors",
-                  active ? "text-primary" : "text-muted-foreground"
+                  "flex flex-col items-center justify-center gap-1 rounded-xl px-1 py-2 text-center transition-all min-h-[4rem]",
+                  active
+                    ? "bg-primary/12 text-primary"
+                    : "text-muted-foreground hover:bg-accent/60 hover:text-foreground"
                 )}
               >
-                <item.icon className={cn("w-5 h-5", active && "drop-shadow-[0_0_6px_hsl(var(--primary)/0.5)]")} />
-                <span className="text-[10px] font-medium leading-none">{item.title}</span>
+                <item.icon className={cn("h-5 w-5", active && "drop-shadow-[0_0_6px_hsl(var(--primary)/0.5)]")} />
+                <span className="text-[11px] font-medium leading-none">{item.title}</span>
               </button>
             );
           })}
@@ -65,12 +67,14 @@ export function MobileBottomNav() {
             <PopoverTrigger asChild>
               <button
                 className={cn(
-                  "flex flex-col items-center justify-center gap-0.5 flex-1 h-full min-h-[44px] transition-colors",
-                  moreIsActive ? "text-primary" : "text-muted-foreground"
+                  "flex flex-col items-center justify-center gap-1 rounded-xl px-1 py-2 text-center transition-all min-h-[4rem]",
+                  moreIsActive
+                    ? "bg-primary/12 text-primary"
+                    : "text-muted-foreground hover:bg-accent/60 hover:text-foreground"
                 )}
               >
-                <MoreHorizontal className={cn("w-5 h-5", moreIsActive && "drop-shadow-[0_0_6px_hsl(var(--primary)/0.5)]")} />
-                <span className="text-[10px] font-medium leading-none">{t.nav.more}</span>
+                <MoreHorizontal className={cn("h-5 w-5", moreIsActive && "drop-shadow-[0_0_6px_hsl(var(--primary)/0.5)]")} />
+                <span className="text-[11px] font-medium leading-none">{t.nav.more}</span>
               </button>
             </PopoverTrigger>
             <PopoverContent

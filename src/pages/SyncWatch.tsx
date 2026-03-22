@@ -8,7 +8,7 @@ import { useSyncWatch, generateRoomId, type SyncState } from "@/hooks/useSyncWat
 import { VideoQueue } from "@/components/sync/VideoQueue";
 import { ClipsOverlay } from "@/components/sync/ClipsOverlay";
 import { cn } from "@/lib/utils";
-import { translations } from "@/lib/i18n";
+import { useSettings } from "@/contexts/SettingsContext";
 import { toast } from "sonner";
 import { NicknameModal } from "@/components/sync/NicknameModal";
 import { UserList } from "@/components/sync/UserList";
@@ -16,6 +16,7 @@ import { ChatPanel } from "@/components/sync/ChatPanel";
 import { SystemMessages } from "@/components/sync/SystemMessages";
 import { QueueCountdown } from "@/components/sync/QueueCountdown";
 import { deserializeMedia, parseMediaInput, serializeMedia } from "@/lib/mediaSource";
+import { TAB_PANEL_TRANSITION_CLASS } from "@/lib/transitions";
 
 declare global {
   interface Window {
@@ -61,121 +62,10 @@ function clearSession() {
   sessionStorage.removeItem(SESSION_KEY);
 }
 
-/** Auto-detect locale from navigator.language */
-function detectLocale(): "en" | "zh-TW" | "ja" {
-  const lang = navigator.language || "en";
-  if (lang.startsWith("ja")) return "ja";
-  if (lang.startsWith("zh")) return "zh-TW";
-  return "en";
-}
-
-const labels = {
-  en: {
-    syncWatch: "Sync Watch",
-    createRoom: "Create a Watch Room",
-    orJoin: "or join",
-    enterRoom: "Enter room ID (e.g. abcd-123)",
-    join: "Join",
-    room: "Room",
-    host: "HOST",
-    guest: "GUEST",
-    copyInvite: "Copy Invite",
-    leave: "Leave",
-    loadVideo: "Load Video",
-    pasteUrl: "Paste YouTube URL, video ID, or direct video URL...",
-    syncing: "Syncing...",
-    members: "Members",
-    chat: "Chat",
-    log: "Log",
-    hostWaiting: "Paste a video link above to start watching",
-    guestWaiting: "Waiting for host to load a video...",
-    createDesc: "Create or join a watch room to sync playback with friends",
-    showChat: "Show Chat",
-    setNickname: "Set Nickname",
-    nicknamePlaceholder: "Your nickname...",
-    joinRoom: "Join Room",
-    enterNickname: "Enter a nickname to join the watch room.",
-    allowGuest: "Allow Guest Control",
-    hostLabel: "Host",
-    guestLabel: "Guest",
-    hostOnlyVideo: "Only the Host can change the video",
-    queue: "Queue",
-    hostMode: "Host Mode",
-    freeControl: "Free Control",
-  },
-  "zh-TW": {
-    syncWatch: "同步觀看",
-    createRoom: "建立觀看房間",
-    orJoin: "或加入",
-    enterRoom: "輸入房間 ID（例如 abcd-123）",
-    join: "加入",
-    room: "房間",
-    host: "房主",
-    guest: "訪客",
-    copyInvite: "複製邀請連結",
-    leave: "離開",
-    loadVideo: "載入影片",
-    pasteUrl: "貼上 YouTube 網址、影片 ID 或直連影片網址...",
-    syncing: "同步中...",
-    members: "成員",
-    chat: "聊天",
-    log: "紀錄",
-    hostWaiting: "在上方貼上影片連結開始觀看",
-    guestWaiting: "等待房主載入影片...",
-    createDesc: "建立或加入觀看房間，與朋友同步播放",
-    showChat: "顯示聊天室",
-    setNickname: "設定暱稱",
-    nicknamePlaceholder: "你的暱稱...",
-    joinRoom: "加入房間",
-    enterNickname: "輸入暱稱以加入觀看房間。",
-    allowGuest: "允許訪客控制",
-    hostLabel: "房主",
-    guestLabel: "訪客",
-    hostOnlyVideo: "只有房主可以更換影片",
-    queue: "待播",
-    hostMode: "房主模式",
-    freeControl: "自由控制",
-  },
-  ja: {
-    syncWatch: "同時視聴",
-    createRoom: "視聴ルームを作成",
-    orJoin: "または参加",
-    enterRoom: "ルームIDを入力",
-    join: "参加",
-    room: "ルーム",
-    host: "ホスト",
-    guest: "ゲスト",
-    copyInvite: "招待リンクをコピー",
-    leave: "退出",
-    loadVideo: "動画を読み込む",
-    pasteUrl: "YouTube URL、動画ID、または直接動画URLを貼り付け...",
-    syncing: "同期中...",
-    members: "メンバー",
-    chat: "チャット",
-    log: "ログ",
-    hostWaiting: "上に動画リンクを貼り付けて視聴開始",
-    guestWaiting: "ホストが動画を読み込むのを待っています...",
-    createDesc: "視聴ルームを作成または参加して、友達と再生を同期",
-    showChat: "チャットを表示",
-    setNickname: "ニックネームを設定",
-    nicknamePlaceholder: "あなたのニックネーム...",
-    joinRoom: "ルームに参加",
-    enterNickname: "ニックネームを入力してルームに参加してください。",
-    allowGuest: "ゲスト操作を許可",
-    hostLabel: "ホスト",
-    guestLabel: "ゲスト",
-    hostOnlyVideo: "ホストのみが動画を変更できます",
-    queue: "キュー",
-    hostMode: "ホストモード",
-    freeControl: "フリー操作",
-  },
-} as const;
-
 export default function SyncWatch() {
   const [searchParams, setSearchParams] = useSearchParams();
   const isMobile = useIsMobile();
-  const locale = useMemo(detectLocale, []);
-  const l = labels[locale];
+  const { locale, t } = useSettings();
 
   const roomParam = searchParams.get("room");
   const savedSession = useRef(loadSession()).current;
@@ -212,6 +102,9 @@ export default function SyncWatch() {
     () => (currentVideoId ? deserializeMedia(currentVideoId) : null),
     [currentVideoId]
   );
+  const mobileViewportStyle = isMobile
+    ? { height: "calc(100dvh - 6.25rem - env(safe-area-inset-bottom, 0px))" }
+    : undefined;
 
   const {
     syncState, peers, peerCount, lastEvent, guestControlEnabled,
@@ -520,8 +413,8 @@ export default function SyncWatch() {
     const normalizedBase = basePath.endsWith("/") ? basePath : `${basePath}/`;
     const url = `${window.location.origin}${normalizedBase}#/sync?room=${roomId}`;
     navigator.clipboard.writeText(url);
-    toast.success(locale === "zh-TW" ? "已複製邀請連結！" : locale === "ja" ? "招待リンクをコピーしました！" : "Invite link copied!");
-  }, [roomId, locale]);
+    toast.success(t.sync.inviteCopied);
+  }, [roomId, t.sync.inviteCopied]);
 
   const handleLeaveRoom = useCallback(() => {
     clearSession();
@@ -597,31 +490,35 @@ export default function SyncWatch() {
         <div className="w-full max-w-md space-y-8">
           <div className="text-center space-y-2">
             <Radio className="w-12 h-12 text-primary mx-auto" />
-            <h1 className="text-3xl font-bold text-foreground">{l.syncWatch}</h1>
-            <p className="text-muted-foreground text-sm">{l.createDesc}</p>
+            <h1 className="text-3xl font-bold text-foreground">{t.sync.syncWatch}</h1>
+            <p className="text-muted-foreground text-sm">{t.sync.createDesc}</p>
           </div>
 
           <div className="space-y-4">
-            <Button onClick={() => { setNeedsNickname(true); setIsHost(true); }} className="w-full gap-2" size="lg">
+            <Button
+              onClick={() => { setNeedsNickname(true); setIsHost(true); }}
+              className="w-full gap-2 min-h-[48px]"
+              size="lg"
+            >
               <Plus className="w-5 h-5" />
-              {l.createRoom}
+              {t.sync.createRoom}
             </Button>
 
             <div className="flex items-center gap-2">
               <div className="flex-1 h-px bg-border" />
-              <span className="text-xs text-muted-foreground uppercase tracking-wider">{l.orJoin}</span>
+              <span className="text-xs text-muted-foreground uppercase tracking-wider">{t.sync.orJoin}</span>
               <div className="flex-1 h-px bg-border" />
             </div>
 
-            <div className="flex gap-2">
+            <div className={cn("gap-2", isMobile ? "grid grid-cols-1" : "flex")}>
               <Input
-                placeholder={l.enterRoom}
+                placeholder={t.sync.enterRoom}
                 value={joinInput}
                 onChange={(e) => setJoinInput(e.target.value)}
-                className="flex-1"
+                className="flex-1 min-h-[48px]"
               />
-              <Button onClick={handleJoinRoom} variant="secondary">
-                {l.join}
+              <Button onClick={handleJoinRoom} variant="secondary" className="min-h-[48px]">
+                {t.sync.join}
               </Button>
             </div>
           </div>
@@ -647,7 +544,10 @@ export default function SyncWatch() {
       }}
     >
 
-      <div className="flex border-b border-border/30 bg-card/60">
+      <div className={cn(
+        "border-b border-border/30 bg-card/60",
+        isMobile ? "grid grid-cols-4 gap-1 p-1.5" : "flex"
+      )}>
         {(["members", "chat", "queue", "log"] as const).map((tab) => (
           <button
             key={tab}
@@ -656,16 +556,22 @@ export default function SyncWatch() {
               if (isMobile) setMobileSection("sidebar");
             }}
             className={cn(
-              "flex-1 text-xs min-h-[44px] font-medium transition-colors",
+              isMobile
+                ? "min-h-[42px] rounded-md px-1.5 text-[11px] font-medium transition-colors"
+                : "flex-1 text-xs min-h-[44px] font-medium transition-colors",
               sidebarTab === tab
-                ? "text-primary border-b-2 border-primary"
-                : "text-muted-foreground hover:text-foreground"
+                ? isMobile
+                  ? "bg-primary/12 text-primary"
+                  : "text-primary border-b-2 border-primary"
+                : isMobile
+                  ? "text-muted-foreground hover:bg-accent/60 hover:text-foreground"
+                  : "text-muted-foreground hover:text-foreground"
             )}
           >
-            {tab === "members" ? `${l.members} (${peerCount})`
-              : tab === "chat" ? l.chat
-              : tab === "queue" ? `${l.queue}${queue.length > 0 ? ` (${queue.length})` : ""}`
-              : l.log}
+            {tab === "members" ? `${t.sync.members} (${peerCount})`
+              : tab === "chat" ? t.sync.chat
+              : tab === "queue" ? `${t.sync.queue}${queue.length > 0 ? ` (${queue.length})` : ""}`
+              : t.sync.log}
           </button>
         ))}
       </div>
@@ -673,7 +579,7 @@ export default function SyncWatch() {
       {(!isMobile || mobileSection !== "collapsed") && (
         <div className="flex-1 min-h-0 overflow-hidden">
           {sidebarTab === "members" && (
-            <div className="p-3 overflow-y-auto h-full">
+            <div className={`p-3 overflow-y-auto h-full ${TAB_PANEL_TRANSITION_CLASS}`}>
               <UserList
                 peers={peers}
                 myPeerId={myPeerId}
@@ -685,25 +591,29 @@ export default function SyncWatch() {
             </div>
           )}
           {sidebarTab === "chat" && (
-            <ChatPanel
-              messages={chatMessages}
-              onSend={sendChatMessage}
-              myNickname={nickname}
-            />
+            <div className={`h-full ${TAB_PANEL_TRANSITION_CLASS}`}>
+              <ChatPanel
+                messages={chatMessages}
+                onSend={sendChatMessage}
+                myNickname={nickname}
+              />
+            </div>
           )}
           {sidebarTab === "queue" && (
-            <VideoQueue
-              queue={queue}
-              isHost={effectiveHost || (guestControlEnabled && !!roomId)}
-              onAdd={addToQueue}
-              onRemove={removeFromQueue}
-              onMove={moveInQueue}
-              onPlay={handlePlayFromQueue}
-              locale={locale}
-            />
+            <div className={`h-full ${TAB_PANEL_TRANSITION_CLASS}`}>
+              <VideoQueue
+                queue={queue}
+                isHost={effectiveHost || (guestControlEnabled && !!roomId)}
+                onAdd={addToQueue}
+                onRemove={removeFromQueue}
+                onMove={moveInQueue}
+                onPlay={handlePlayFromQueue}
+                locale={locale}
+              />
+            </div>
           )}
           {sidebarTab === "log" && (
-            <div className="h-full min-h-0">
+            <div className={`h-full min-h-0 ${TAB_PANEL_TRANSITION_CLASS}`}>
               <SystemMessages messages={systemMessages} />
             </div>
           )}
@@ -714,75 +624,89 @@ export default function SyncWatch() {
 
   // Active room
   return (
-    <div className={cn("space-y-3", isMobile && "h-[calc(100dvh-4rem)] flex flex-col overflow-hidden")}>
+    <div
+      className={cn("space-y-3", isMobile && "flex flex-col overflow-hidden")}
+      style={mobileViewportStyle}
+    >
       {/* Room header */}
-      <div className="flex flex-wrap items-center gap-2 md:gap-3 shrink-0">
-        <div className="flex items-center gap-2">
+      <div className={cn("shrink-0 gap-2 md:gap-3", isMobile ? "grid grid-cols-2" : "flex flex-wrap items-center")}>
+        <div className={cn("flex items-center gap-2", isMobile && "col-span-2") }>
           <Radio className="w-5 h-5 text-primary" />
-          <h1 className="text-xl font-bold text-foreground">{l.syncWatch}</h1>
+          <h1 className="text-xl font-bold text-foreground">{t.sync.syncWatch}</h1>
         </div>
 
-        <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-card border border-border">
-          <span className="text-xs text-muted-foreground font-mono">{l.room}: {roomId}</span>
+        <div className={cn(
+          "flex items-center gap-2 rounded-2xl border border-border bg-card px-3 py-2",
+          isMobile && "min-h-[48px]"
+        )}>
+          <span className="text-xs text-muted-foreground font-mono">{t.sync.room}: {roomId}</span>
           <span className={cn(
             "text-xs px-1.5 py-0.5 rounded font-semibold",
             effectiveHost ? "bg-primary/20 text-primary" : "bg-secondary text-secondary-foreground"
           )}>
-            {effectiveHost ? l.host : l.guest}
+            {effectiveHost ? t.sync.host : t.sync.guest}
           </span>
         </div>
 
-        <div className="flex items-center gap-1 text-xs text-muted-foreground">
+        <div className={cn(
+          "flex items-center gap-1 rounded-2xl border border-border/60 bg-card/60 px-3 py-2 text-xs text-muted-foreground",
+          isMobile && "min-h-[48px] justify-center"
+        )}>
           <Users className="w-3.5 h-3.5" />
           <span>{peerCount}</span>
         </div>
 
-        <div className="flex items-center gap-2 ml-auto">
-          <Button size="sm" variant="outline" className="gap-1.5 min-h-[44px] md:min-h-0" onClick={copyInviteLink}>
+        <div className={cn("flex items-center gap-2", isMobile ? "col-span-2 grid grid-cols-2" : "ml-auto") }>
+          <Button size="sm" variant="outline" className="gap-1.5 min-h-[46px] md:min-h-0" onClick={copyInviteLink}>
             <Copy className="w-3.5 h-3.5" />
-            <span className="hidden sm:inline">{l.copyInvite}</span>
+            <span>{t.sync.copyInvite}</span>
           </Button>
-          <Button size="sm" variant="ghost" className="gap-1.5 min-h-[44px] md:min-h-0 text-destructive" onClick={handleLeaveRoom}>
+          <Button size="sm" variant="ghost" className="gap-1.5 min-h-[46px] md:min-h-0 text-destructive" onClick={handleLeaveRoom}>
             <ArrowLeft className="w-3.5 h-3.5" />
-            <span className="hidden sm:inline">{l.leave}</span>
+            <span>{t.sync.leave}</span>
           </Button>
         </div>
       </div>
 
       {/* Video input bar */}
       {(effectiveHost || guestControlEnabled) ? (
-        <div className="flex gap-2 items-center shrink-0">
+        <div className={cn("shrink-0", isMobile ? "space-y-2" : "flex items-center gap-2")}>
           <span className={cn(
-            "text-[10px] font-semibold uppercase tracking-wider px-2 py-1 rounded shrink-0 hidden sm:block",
+            "text-[10px] font-semibold uppercase tracking-wider px-2 py-1 rounded shrink-0",
+            isMobile ? "inline-flex" : "hidden sm:block",
             guestControlEnabled
               ? "bg-emerald-500/15 text-emerald-500 border border-emerald-500/25"
               : "bg-primary/15 text-primary border border-primary/25"
           )}>
-            {guestControlEnabled ? l.freeControl : l.hostMode}
+            {guestControlEnabled ? t.sync.freeControl : t.sync.hostMode}
           </span>
-          <Input
-            placeholder={l.pasteUrl}
-            value={videoInput}
-            onChange={(e) => setVideoInput(e.target.value)}
-            className="flex-1 min-h-[44px] md:min-h-0"
-            onKeyDown={(e) => e.key === "Enter" && handleLoadVideo()}
-          />
-          <Button onClick={handleLoadVideo} className="gap-1.5 shrink-0 min-h-[44px] md:min-h-0">
-            {l.loadVideo}
-          </Button>
-          <Button
-            onClick={() => setShowClips(true)}
-            variant="outline"
-            className="gap-1.5 shrink-0 min-h-[44px] md:min-h-0"
-          >
-            <Film className="w-4 h-4" />
-            {translations[locale].sync.openClips}
-          </Button>
+          <div className={cn(isMobile ? "space-y-2" : "flex flex-1 items-center gap-2")}>
+            <Input
+              placeholder={t.sync.pasteUrl}
+              value={videoInput}
+              onChange={(e) => setVideoInput(e.target.value)}
+              className="flex-1 min-h-[46px] md:min-h-0"
+              onKeyDown={(e) => e.key === "Enter" && handleLoadVideo()}
+            />
+            <div className={cn(isMobile ? "grid grid-cols-2 gap-2" : "flex items-center gap-2") }>
+              <Button onClick={handleLoadVideo} className="gap-1.5 min-h-[46px] shrink-0 md:min-h-0">
+                {t.sync.loadVideo}
+              </Button>
+              <Button
+                onClick={() => setShowClips(true)}
+                variant="outline"
+                className="gap-1.5 min-h-[46px] shrink-0 md:min-h-0"
+              >
+                <Film className="w-4 h-4" />
+                {t.sync.openClips}
+              </Button>
+            </div>
+          </div>
         </div>
       ) : (
         <div className="flex items-center gap-2 px-3 py-2.5 rounded-md border border-border/40 bg-muted/30 text-muted-foreground text-sm select-none shrink-0">
           <Radio className="w-4 h-4 opacity-50 shrink-0" />
-          <span>{l.hostOnlyVideo}</span>
+          <span>{t.sync.hostOnlyVideo}</span>
         </div>
       )}
 
@@ -801,12 +725,12 @@ export default function SyncWatch() {
         onSelectClip={handleSelectClip}
         locale={locale}
         labels={{
-          clipsTitle: translations[locale].sync.clipsTitle,
-          selectClipToAdd: translations[locale].sync.selectClipToAdd,
-          noClipsFound: translations[locale].sync.noClipsFound,
-          clipsLoading: translations[locale].sync.clipsLoading,
-          loadMore: translations[locale].common.loadMore,
-          loading: translations[locale].common.loading,
+          clipsTitle: t.sync.clipsTitle,
+          selectClipToAdd: t.sync.selectClipToAdd,
+          noClipsFound: t.sync.noClipsFound,
+          clipsLoading: t.sync.clipsLoading,
+          loadMore: t.common.loadMore,
+          loading: t.common.loading,
         }}
       />
 
@@ -855,7 +779,7 @@ export default function SyncWatch() {
               <div className="text-center space-y-2">
                 <Radio className="w-10 h-10 text-muted-foreground mx-auto opacity-40" />
                 <p className="text-muted-foreground text-sm">
-                  {effectiveHost ? l.hostWaiting : l.guestWaiting}
+                  {effectiveHost ? t.sync.hostWaiting : t.sync.guestWaiting}
                 </p>
               </div>
             </div>

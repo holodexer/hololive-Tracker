@@ -16,6 +16,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { StaggerList } from "@/components/StaggerList";
 
 export default function Playlist() {
   const { playlistId } = useParams<{ playlistId: string }>();
@@ -134,7 +135,7 @@ export default function Playlist() {
           <p className="text-sm">{t.playlists.empty}</p>
         </div>
       ) : (
-        <div className="space-y-2">
+        <StaggerList className="space-y-2">
           {playlist.videoIds.map((videoId) => {
             const meta = getVideoMeta(videoId) ?? fetchedMeta[videoId];
             const thumbnail = `https://i.ytimg.com/vi/${videoId}/mqdefault.jpg`;
@@ -178,7 +179,7 @@ export default function Playlist() {
               </div>
             );
           })}
-        </div>
+        </StaggerList>
       )}
 
       {/* Delete confirmation */}

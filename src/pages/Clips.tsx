@@ -6,6 +6,8 @@ import { mixClipsByLanguage } from "@/lib/clipMixing";
 import { StreamCard } from "@/components/StreamCard";
 import { Loader2 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
+import { LoadTransition } from "@/components/LoadTransition";
+import { StaggerList } from "@/components/StaggerList";
 
 const PAGE_SIZE = 50;
 
@@ -67,11 +69,7 @@ const Clips = () => {
   }, [page, clipLangKey, hidePrivateVideos]);
 
   if (initLoading) {
-    return (
-      <div className="flex items-center justify-center min-h-[60vh]">
-        <Loader2 className="w-8 h-8 animate-spin text-primary" />
-      </div>
-    );
+    return <LoadTransition loading={true}>null</LoadTransition>;
   }
 
   return (
@@ -81,11 +79,11 @@ const Clips = () => {
         <p className="text-muted-foreground">{t.clips.noClips}</p>
       ) : (
         <>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+          <StaggerList className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
             {clips!.map((s) => (
               <StreamCard key={s.id} stream={s} />
             ))}
-          </div>
+          </StaggerList>
           {hasMore && (
             <div className="flex justify-center mt-6">
               <button

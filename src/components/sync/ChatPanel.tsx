@@ -62,15 +62,15 @@ export function ChatPanel({ messages, onSend, myNickname }: ChatPanelProps) {
         </div>
       </ScrollArea>
 
-      <div className="flex gap-1.5 p-2 border-t border-border/30">
+      <div className="flex gap-2 p-3 border-t border-border/30">
         <Input
           placeholder={t.sync.messagePlaceholder}
           value={input}
           onChange={(e) => setInput(e.target.value)}
-          className="flex-1 h-8 text-xs"
+          className="h-10 flex-1 text-sm"
           onKeyDown={(e) => e.key === "Enter" && handleSend()}
         />
-        <Button size="sm" variant="secondary" className="h-8 w-8 p-0 shrink-0" onClick={handleSend} disabled={!input.trim()}>
+        <Button size="sm" variant="secondary" className="h-10 w-10 p-0 shrink-0" onClick={handleSend} disabled={!input.trim()}>
           <Send className="w-3.5 h-3.5" />
         </Button>
       </div>

@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { useState, useRef } from "react";
 import { useSettings } from "@/contexts/SettingsContext";
 import { useHolodexStreams, useHololiveChannels } from "@/hooks/useHolodex";
-import { getDisplayName } from "@/lib/utils";
+import { getDisplayName, getChannelPhotoUrl } from "@/lib/utils";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 
 type Layout = "2x2" | "1x2";
@@ -117,8 +117,18 @@ export default function MultiView() {
                     }`}
                   >
                     <img
-                      src={ch.photo ?? ""}
+                      src={getChannelPhotoUrl(ch.photo)}
                       alt={name}
+                      onError={(e) => {
+                        const img = e.currentTarget;
+                        if (!img.dataset.fallbackTried) {
+                          img.dataset.fallbackTried = "1";
+                          img.src = `https://unavatar.io/youtube/${ch.id}`;
+                          return;
+                        }
+                        img.onerror = null;
+                        img.src = "/channel-placeholder.svg";
+                      }}
                       className={`w-10 h-10 rounded-full object-cover ring-2 ring-live animate-pulse-live shadow-[0_0_10px_hsl(var(--live)/0.5)] ${
                         alreadyAdded ? "ring-muted-foreground animate-none shadow-none" : ""
                       }`}

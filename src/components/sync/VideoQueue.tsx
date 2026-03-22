@@ -23,6 +23,7 @@ const queueLabels = {
     add: "Add",
     upNext: "Up Next",
     hostOnly: "Only the Host can manage the queue",
+    playNow: "Play now",
   },
   "zh-TW": {
     empty: "待播清單為空",
@@ -30,6 +31,7 @@ const queueLabels = {
     add: "加入",
     upNext: "即將播放",
     hostOnly: "只有房主可以管理待播清單",
+    playNow: "立即播放",
   },
   ja: {
     empty: "キューは空です",
@@ -37,6 +39,7 @@ const queueLabels = {
     add: "追加",
     upNext: "次に再生",
     hostOnly: "ホストのみがキューを管理できます",
+    playNow: "今すぐ再生",
   },
 } as const;
 
@@ -111,16 +114,16 @@ export function VideoQueue({ queue, isHost, onAdd, onRemove, onMove, onPlay, loc
   return (
     <div className="flex flex-col h-full">
       {isHost && (
-        <div className="flex gap-1.5 p-2 border-b border-border/30">
+        <div className="flex gap-2 p-3 border-b border-border/30">
           <Input
             placeholder={l.addHint}
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && handleAdd()}
-            className="flex-1 h-8 text-xs"
+            className="h-10 flex-1 text-sm"
             disabled={loading}
           />
-          <Button size="sm" variant="secondary" className="h-8 px-2.5 shrink-0" onClick={handleAdd} disabled={loading}>
+          <Button size="sm" variant="secondary" className="h-10 px-3 shrink-0" onClick={handleAdd} disabled={loading}>
             {loading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Plus className="w-3.5 h-3.5" />}
           </Button>
         </div>
@@ -192,7 +195,7 @@ export function VideoQueue({ queue, isHost, onAdd, onRemove, onMove, onPlay, loc
                       <button
                         onClick={() => onPlay(item.id)}
                         className="p-0.5 rounded hover:bg-primary/20 text-primary transition-colors"
-                        title="Play now"
+                        title={l.playNow}
                       >
                         <Play className="w-3 h-3" />
                       </button>

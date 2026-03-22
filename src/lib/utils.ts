@@ -13,3 +13,10 @@ export function getDisplayName(
   if (locale === "ja") return channel.name;
   return channel.english_name || channel.name;
 }
+
+export function getChannelPhotoUrl(photo?: string): string {
+  if (!photo) return "/channel-placeholder.svg";
+  if (photo.startsWith("//")) return `https:${photo}`;
+  if (photo.startsWith("http://")) return `https://${photo.slice(7)}`;
+  return photo;
+}
