@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useSettings } from "@/contexts/SettingsContext";
 import { triggerCinema } from "@/components/CinemaOverlay";
 import { fetchVideoDetails } from "@/lib/holodex";
+import { buildYouTubeThumbnailUrl, buildYouTubeWatchUrl } from "@/lib/urls";
 import { Trash2, Play, ListMusic, ArrowLeft, Pencil, Check, X, Search, SlidersHorizontal } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useMemo, useRef, useState } from "react";
@@ -88,7 +89,7 @@ export default function Playlist() {
         meta,
         title: meta?.title ?? videoId,
         channelName: meta?.channelName ?? "",
-        thumbnail: `https://i.ytimg.com/vi/${videoId}/mqdefault.jpg`,
+        thumbnail: buildYouTubeThumbnailUrl(videoId),
       };
     });
   }, [playlist.videoIds, getVideoMeta, fetchedMeta]);
@@ -131,12 +132,12 @@ export default function Playlist() {
       id: videoId,
       title: meta?.title ?? videoId,
       channelName: meta?.channelName ?? "",
-      thumbnail: `https://i.ytimg.com/vi/${videoId}/mqdefault.jpg`,
+      thumbnail: buildYouTubeThumbnailUrl(videoId),
       status: "past",
     });
 
     if (directYoutube) {
-      window.open(`https://www.youtube.com/watch?v=${videoId}`, "_blank");
+      window.open(buildYouTubeWatchUrl(videoId), "_blank");
     } else {
       triggerCinema(videoId);
     }
@@ -351,7 +352,7 @@ export default function Playlist() {
                     <p className="text-xs text-muted-foreground truncate">{meta.channelName}</p>
                   )}
                   <a
-                    href={`https://www.youtube.com/watch?v=${videoId}`}
+                    href={buildYouTubeWatchUrl(videoId)}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="text-xs text-muted-foreground hover:text-primary transition-colors"

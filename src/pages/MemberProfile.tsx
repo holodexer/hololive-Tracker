@@ -14,6 +14,7 @@ import { LoadTransition } from "@/components/LoadTransition";
 import { StaggerList } from "@/components/StaggerList";
 import { Loader2, Heart, ExternalLink } from "lucide-react";
 import { getDisplayName, getChannelPhotoUrl } from "@/lib/utils";
+import { buildYouTubeChannelUrl } from "@/lib/urls";
 import { TAB_PANEL_TRANSITION_CLASS } from "@/lib/transitions";
 
 const PAGE_SIZE = 48;
@@ -189,7 +190,7 @@ const MemberProfile = () => {
                   <Heart className={`w-5 h-5 ${isFav ? "fill-current" : ""}`} />
                 </button>
                 <a
-                  href={`https://www.youtube.com/channel/${channel.id}`}
+                  href={buildYouTubeChannelUrl(channel.id)}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="text-muted-foreground hover:text-primary transition-colors"

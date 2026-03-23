@@ -10,7 +10,8 @@ import { ClipsOverlay } from "@/components/sync/ClipsOverlay";
 import { cn } from "@/lib/utils";
 import { useSettings } from "@/contexts/SettingsContext";
 import { supabase } from "@/integrations/supabase/client";
-import { toast } from "sonner";
+import { getYouTubeIframeApiUrl, buildYouTubeLiveChatUrl } from "@/lib/urls";
+import { showSuccess, showValidationError } from "@/lib/errors";
 import { NicknameModal } from "@/components/sync/NicknameModal";
 import { UserList } from "@/components/sync/UserList";
 
@@ -33,7 +34,7 @@ function loadYouTubeAPI(): Promise<void> {
       return;
     }
     const tag = document.createElement("script");
-    tag.src = "https://www.youtube.com/iframe_api";
+    tag.src = getYouTubeIframeApiUrl();
     document.head.appendChild(tag);
     window.onYouTubeIframeAPIReady = () => resolve();
   });
@@ -43,15 +44,6 @@ const SESSION_KEY = "sync-watch-session";
 
 interface SessionData {
   roomId: string;
-}
-
-interface ActiveRoomEntry {
-  roomId: string;
-  hostPeerId: string;
-  hostNickname?: string;
-  hostAvatar?: string;
-  peerCount: number;
-  updatedAt: number;
 }
 
 function saveSession(data: SessionData) {
@@ -93,7 +85,6 @@ export default function SyncWatch() {
   const [joinInput, setJoinInput] = useState("");
   const [isJoiningRoom, setIsJoiningRoom] = useState(false);
   const [isValidatingInitialRoom, setIsValidatingInitialRoom] = useState(Boolean(initialRoomCandidate && !initialHost));
-  const [activeRooms, setActiveRooms] = useState<ActiveRoomEntry[]>([]);
   const [sidebarTab, setSidebarTab] = useState<"members" | "chat" | "log" | "queue">("members");
   const [countdown, setCountdown] = useState<{ videoId: string; title?: string } | null>(null);
   const [mobileSection, setMobileSection] = useState<"sidebar" | "collapsed">("sidebar");
@@ -237,68 +228,7 @@ export default function SyncWatch() {
     }
   }, [roomId, username]);
 
-  // Subscribe active room registry for lobby list.
-  useEffect(() => {
-    const registry = supabase.channel("sync-watch:rooms", {
-      config: { presence: { key: `lobby:${Math.random().toString(36).slice(2, 8)}` } },
-    });
-    const STALE_ROOM_MS = 6500;
 
-    const refreshActiveRooms = () => {
-      const presence = registry.presenceState();
-      const byRoom = new Map<string, ActiveRoomEntry>();
-      const now = Date.now();
-
-      for (const key of Object.keys(presence)) {
-        const entries = presence[key] as any[];
-        for (const entry of entries) {
-          if (!entry?.roomId || !entry?.hostPeerId) continue;
-          const current = byRoom.get(entry.roomId);
-          const next: ActiveRoomEntry = {
-            roomId: entry.roomId,
-            hostPeerId: entry.hostPeerId,
-            hostNickname: typeof entry.hostNickname === "string" ? entry.hostNickname : undefined,
-            hostAvatar: typeof entry.hostAvatar === "string" ? entry.hostAvatar : undefined,
-            peerCount: Number(entry.peerCount) > 0 ? Number(entry.peerCount) : 1,
-            updatedAt: Number(entry.updatedAt) || Date.now(),
-          };
-          if (now - next.updatedAt > STALE_ROOM_MS) continue;
-          if (!current || next.updatedAt > current.updatedAt) {
-            byRoom.set(next.roomId, next);
-          }
-        }
-      }
-
-      setActiveRooms(
-        Array.from(byRoom.values()).sort((a, b) => b.updatedAt - a.updatedAt)
-      );
-    };
-
-    registry
-      .on("presence", { event: "sync" }, () => {
-        refreshActiveRooms();
-      })
-      .on("presence", { event: "join" }, () => {
-        refreshActiveRooms();
-      })
-      .on("presence", { event: "leave" }, () => {
-        refreshActiveRooms();
-      })
-      .subscribe((status) => {
-        if (status === "SUBSCRIBED") {
-          refreshActiveRooms();
-        }
-      });
-
-    const staleSweep = window.setInterval(() => {
-      refreshActiveRooms();
-    }, 2000);
-
-    return () => {
-      window.clearInterval(staleSweep);
-      registry.unsubscribe();
-    };
-  }, []);
 
   useEffect(() => {
     if (initialRoomValidationDoneRef.current) {
@@ -326,7 +256,7 @@ export default function SyncWatch() {
       .then((exists) => {
         if (cancelled) return;
         if (!exists) {
-          toast.error(t.sync.roomNotFound);
+          showValidationError(t.sync.roomNotFound);
           clearSession();
           setNeedsNickname(false);
           setRoomId(null);
@@ -335,7 +265,7 @@ export default function SyncWatch() {
       })
       .catch(() => {
         if (cancelled) return;
-        toast.error(t.sync.roomValidationError);
+        showValidationError(t.sync.roomValidationError);
         clearSession();
         setNeedsNickname(false);
         setRoomId(null);
@@ -568,7 +498,7 @@ export default function SyncWatch() {
     validateRoomExists(id)
       .then((exists) => {
         if (!exists) {
-          toast.error(t.sync.roomNotFound);
+          showValidationError(t.sync.roomNotFound);
           return;
         }
 
@@ -578,7 +508,7 @@ export default function SyncWatch() {
         if (!username.trim()) setNeedsNickname(true);
       })
       .catch(() => {
-        toast.error(t.sync.roomValidationError);
+        showValidationError(t.sync.roomValidationError);
       })
       .finally(() => {
         setIsJoiningRoom(false);
@@ -648,7 +578,7 @@ export default function SyncWatch() {
     const normalizedBase = basePath.endsWith("/") ? basePath : `${basePath}/`;
     const url = `${window.location.origin}${normalizedBase}#/sync?room=${roomId}`;
     navigator.clipboard.writeText(url);
-    toast.success(t.sync.inviteCopied);
+    showSuccess(t.sync.inviteCopied);
   }, [roomId, t.sync.inviteCopied]);
 
   const handleLeaveRoom = useCallback(() => {
@@ -672,7 +602,7 @@ export default function SyncWatch() {
 
   const handleRequestResync = useCallback(() => {
     requestSync();
-    toast.success(t.sync.resyncRequested);
+    showSuccess(t.sync.resyncRequested);
   }, [requestSync, t.sync.resyncRequested]);
 
   const handleGuestUnmute = useCallback(() => {
@@ -777,45 +707,6 @@ export default function SyncWatch() {
                 {isJoiningRoom ? t.common.loading : t.sync.join}
               </Button>
             </div>
-
-            <div className="rounded-xl border border-border/60 p-2.5 space-y-2.5">
-              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">目前房間列表</p>
-              {activeRooms.length === 0 ? (
-                <p className="text-xs text-muted-foreground">目前沒有可加入的房間</p>
-              ) : (
-                <div className="grid grid-cols-3 gap-2 max-h-64 overflow-y-auto pr-1 sm:grid-cols-4">
-                  {activeRooms.map((room) => (
-                    <button
-                      key={room.roomId}
-                      type="button"
-                      onClick={() => joinRoomById(room.roomId)}
-                      disabled={isJoiningRoom}
-                      className="group aspect-square w-full rounded-xl border border-border/60 bg-gradient-to-b from-background/60 to-background/20 p-2 text-left shadow-sm transition-all duration-200 hover:border-primary/50 hover:shadow-md disabled:opacity-60 disabled:pointer-events-none"
-                    >
-                      <div className="flex h-full flex-col items-center justify-center gap-1.5 text-center">
-                        {room.hostAvatar ? (
-                          <img
-                            src={room.hostAvatar}
-                            alt={room.hostNickname || "Host"}
-                            className="h-10 w-10 rounded-full object-cover ring-2 ring-primary/25"
-                          />
-                        ) : (
-                          <div className="h-10 w-10 rounded-full bg-muted text-foreground flex items-center justify-center text-xs font-semibold ring-2 ring-border/70">
-                            {(room.hostNickname || "H").slice(0, 1).toUpperCase()}
-                          </div>
-                        )}
-                        <p className="max-w-full truncate text-[11px] font-semibold text-foreground group-hover:text-primary transition-colors">
-                          {room.hostNickname || "Host"}
-                        </p>
-                        <div className="rounded-full border border-border/60 bg-background/70 px-1.5 py-0.5 text-[10px] text-muted-foreground">
-                          {room.peerCount}人
-                        </div>
-                      </div>
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
           </div>
         </div>
       </div>
@@ -890,7 +781,7 @@ export default function SyncWatch() {
               {currentMedia?.source === "youtube" ? (
                 <iframe
                   key={currentMedia.value}
-                  src={`https://www.youtube.com/live_chat?v=${currentMedia.value}&embed_domain=${window.location.hostname}`}
+                  src={buildYouTubeLiveChatUrl(currentMedia.value, window.location.hostname)}
                   className="w-full flex-1 border-0"
                   allow="clipboard-write"
                   title="YouTube Live Chat"

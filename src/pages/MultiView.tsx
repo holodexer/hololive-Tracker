@@ -171,7 +171,7 @@ export default function MultiView() {
                 ref={(el) => {
                   if (el) iframeRefs.current.set(videoId, el);
                 }}
-                src={`https://www.youtube.com/embed/${videoId}?autoplay=1&mute=${allMuted ? 1 : 0}`}
+                src={buildYouTubeEmbedUrl(videoId, true, allMuted ? true : false)}
                 className="w-full h-full"
                 allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
                 allowFullScreen

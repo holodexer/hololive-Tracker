@@ -1,8 +1,8 @@
 import { useEffect } from "react";
 import { differenceInMinutes } from "date-fns";
-import { toast } from "sonner";
 import { useHolodexStreams } from "@/hooks/useHolodex";
 import { useSettings } from "@/contexts/SettingsContext";
+import { showSuccess } from "@/lib/errors";
 
 const REMINDER_WINDOW_MINUTES = 10;
 
@@ -27,7 +27,7 @@ export function ReminderWatcher() {
         return;
       }
 
-      toast.success(t.reminders.toastTitle, {
+      showSuccess(t.reminders.toastTitle, {
         description: `${reminder.channelName} · ${reminder.title}`,
       });
 

@@ -1,11 +1,12 @@
 import type { HolodexVideo } from "@/lib/holodex";
 import { format } from "date-fns";
+import { buildYouTubeThumbnailUrl, buildYouTubeWatchUrl } from "@/lib/urls";
 import { Eye, Clock, ListPlus, Check, Bell, BellRing } from "lucide-react";
 import { useSettings } from "@/contexts/SettingsContext";
 import { triggerCinema } from "@/components/CinemaOverlay";
 import { getDisplayName } from "@/lib/utils";
 import { useState, useRef, useEffect } from "react";
-import { toast } from "sonner";
+import { showSuccess } from "@/lib/errors";
 
 interface StreamCardProps {
   stream: HolodexVideo;
@@ -15,7 +16,7 @@ export function StreamCard({ stream }: StreamCardProps) {
   const { directYoutube, locale, playlists, addToPlaylist, recordRecentVideo, toggleReminder, hasReminder, t } = useSettings();
   const isLive = stream.status === "live";
   const isUpcoming = stream.status === "upcoming";
-  const thumbnail = `https://i.ytimg.com/vi/${stream.id}/mqdefault.jpg`;
+  const thumbnail = buildYouTubeThumbnailUrl(stream.id);
   const channelName = getDisplayName(stream.channel, locale);
   const reminderEnabled = hasReminder(stream.id);
 
@@ -81,14 +82,14 @@ export function StreamCard({ stream }: StreamCardProps) {
       scheduledFor: stream.available_at,
     });
 
-    toast.success(reminderEnabled ? t.reminders.removed : t.reminders.added, {
+    showSuccess(reminderEnabled ? t.reminders.removed : t.reminders.added, {
       description: stream.title,
     });
   };
 
   return (
     <a
-      href={`https://www.youtube.com/watch?v=${stream.id}`}
+      href={buildYouTubeWatchUrl(stream.id)}
       target="_blank"
       rel="noopener noreferrer"
       onClick={handleClick}

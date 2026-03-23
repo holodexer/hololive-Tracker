@@ -13,6 +13,7 @@ import { filterUnavailableVideos } from "@/lib/videoFilters";
 import { mixClipsByLanguage } from "@/lib/clipMixing";
 import { useSettings } from "@/contexts/SettingsContext";
 import { format } from "date-fns";
+import { buildYouTubeThumbnailUrl } from "@/lib/urls";
 
 interface ClipsOverlayProps {
   open: boolean;
@@ -515,7 +516,7 @@ export function ClipsOverlay({
               ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                   {archives.map((video) => {
-                    const thumbnail = `https://i.ytimg.com/vi/${video.id}/mqdefault.jpg`;
+                    const thumbnail = buildYouTubeThumbnailUrl(video.id);
                     const channelName = video.channel?.name || "";
 
                     return (
@@ -567,7 +568,7 @@ export function ClipsOverlay({
               ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                   {clips.map((clip) => {
-                    const thumbnailUrl = `https://i.ytimg.com/vi/${clip.id}/mqdefault.jpg`;
+                    const thumbnailUrl = buildYouTubeThumbnailUrl(clip.id);
                     const channelName = clip.channel?.name || "";
 
                     return (
@@ -616,7 +617,7 @@ export function ClipsOverlay({
                   <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
                     {playlists.map((pl) => {
                       const thumb = pl.videoIds.length > 0
-                        ? `https://i.ytimg.com/vi/${pl.videoIds[0]}/mqdefault.jpg`
+                        ? buildYouTubeThumbnailUrl(pl.videoIds[0])
                         : null;
                       return (
                         <button
@@ -663,7 +664,7 @@ export function ClipsOverlay({
                       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                         {pl.videoIds.map((videoId) => {
                           const meta = getVideoMeta(videoId);
-                          const thumb = `https://i.ytimg.com/vi/${videoId}/mqdefault.jpg`;
+                          const thumb = buildYouTubeThumbnailUrl(videoId);
                           const title = meta?.title || videoId;
                           const channel = meta?.channelName || "";
                           return (

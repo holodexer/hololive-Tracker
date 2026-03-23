@@ -1,6 +1,7 @@
 import { useSettings } from "@/contexts/SettingsContext";
 import { useNavigate } from "react-router-dom";
 import { ListMusic, Plus, Trash2, Pencil, Check, X, MoreVertical } from "lucide-react";
+import { buildYouTubeThumbnailUrl } from "@/lib/urls";
 import { Button } from "@/components/ui/button";
 import { useRef, useState } from "react";
 import {
@@ -99,7 +100,7 @@ export default function Playlists() {
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {playlists.map((pl) => {
             const coverThumb = pl.videoIds.length > 0
-              ? `https://i.ytimg.com/vi/${pl.videoIds[0]}/mqdefault.jpg`
+              ? buildYouTubeThumbnailUrl(pl.videoIds[0])
               : null;
             const isEditing = editingId === pl.id;
 

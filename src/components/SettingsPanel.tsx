@@ -7,6 +7,7 @@ import { Switch } from "@/components/ui/switch";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
+import { showValidationError, showSuccess } from "@/lib/errors";
 
 const localeLabels: Record<Locale, string> = {
   en: "English",
@@ -43,7 +44,7 @@ export function SettingsPanel({ collapsed = false, externalOpen, onExternalOpenC
       const nextAvatar = await resizeImageToDataUrl(file, 160);
       setAvatar(nextAvatar);
     } catch {
-      toast.error(t.settings.avatarError);
+      showValidationError(t.settings.avatarError);
     }
 
     if (avatarInputRef.current) avatarInputRef.current.value = "";
@@ -79,10 +80,10 @@ export function SettingsPanel({ collapsed = false, externalOpen, onExternalOpenC
     reader.onload = () => {
       const success = importConfig(reader.result as string);
       if (success) {
-        toast.success(t.settings.importSuccess);
+        showSuccess(t.settings.importSuccess);
         setTimeout(() => window.location.reload(), 800);
       } else {
-        toast.error(t.settings.importError);
+        showValidationError(t.settings.importError);
       }
     };
     reader.readAsText(file);

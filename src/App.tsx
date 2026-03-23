@@ -92,6 +92,7 @@ function AppContent() {
                     <Route path="/playlists" element={<Playlists />} />
                     <Route path="/playlist/:playlistId" element={<Playlist />} />
                     <Route path="/multi-view" element={<MultiView />} />
+                    <Route path="/sync" element={null} />
                     <Route path="*" element={<NotFound />} />
                   </Routes>
                 </div>

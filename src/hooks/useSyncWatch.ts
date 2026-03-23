@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, useCallback, useMemo } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { formatTime } from "@/lib/format";
 import type { RealtimeChannel } from "@supabase/supabase-js";
 
 export interface SyncState {
@@ -60,7 +61,6 @@ function generatePeerId(): string {
 
 export function useSyncWatch({ roomId, nickname, avatar, isHost }: UseSyncWatchOptions) {
   const channelRef = useRef<RealtimeChannel | null>(null);
-  const roomRegistryRef = useRef<RealtimeChannel | null>(null);
   const peerIdRef = useRef(generatePeerId());
 
   const [syncState, setSyncState] = useState<SyncState | null>(null);
@@ -127,80 +127,12 @@ export function useSyncWatch({ roomId, nickname, avatar, isHost }: UseSyncWatchO
 
   const myPeerId = peerIdRef.current;
   const amIHost = computedHostId === myPeerId;
-
-  // Publish active room host info to a shared presence channel for lobby room listing.
+  const peerCountRef = useRef(1);
   useEffect(() => {
-    if (!roomId || !nickname || (!amIHost && !isHostRef.current)) {
-      if (roomRegistryRef.current) {
-        (roomRegistryRef.current as any).untrack?.();
-        roomRegistryRef.current.unsubscribe();
-        roomRegistryRef.current = null;
-      }
-      return;
-    }
+    peerCountRef.current = Math.max(peers.length, 1);
+  }, [peers.length]);
 
-    let cancelled = false;
-    const registry = supabase.channel("sync-watch:rooms", {
-      config: { presence: { key: `host:${myPeerId}` } },
-    });
 
-    registry.subscribe(async (status) => {
-      if (cancelled) return;
-      if (status === "SUBSCRIBED") {
-        await registry.track({
-          roomId,
-          hostPeerId: myPeerId,
-          hostNickname: nickname,
-          hostAvatar: avatar,
-          peerCount: 1,
-          updatedAt: Date.now(),
-        });
-      }
-    });
-
-    roomRegistryRef.current = registry;
-
-    const heartbeat = window.setInterval(() => {
-      if (cancelled || !roomRegistryRef.current) return;
-      roomRegistryRef.current.track({
-        roomId,
-        hostPeerId: myPeerId,
-        hostNickname: nickname,
-        hostAvatar: avatar,
-        peerCount: Math.max(peers.length, 1),
-        updatedAt: Date.now(),
-      }).catch(() => {
-        // Ignore transient track errors during reconnect.
-      });
-    }, 2000);
-
-    return () => {
-      cancelled = true;
-      window.clearInterval(heartbeat);
-      (registry as any).untrack?.();
-      registry.unsubscribe();
-      if (roomRegistryRef.current === registry) {
-        roomRegistryRef.current = null;
-      }
-    };
-  }, [roomId, nickname, avatar, amIHost, myPeerId, peers.length]);
-
-  // Keep registry payload fresh so lobby cards can show host avatar and room size.
-  useEffect(() => {
-    if (!roomId || !nickname || (!amIHost && !isHostRef.current)) return;
-    if (!roomRegistryRef.current) return;
-
-    roomRegistryRef.current.track({
-      roomId,
-      hostPeerId: myPeerId,
-      hostNickname: nickname,
-      hostAvatar: avatar,
-      peerCount: Math.max(peers.length, 1),
-      updatedAt: Date.now(),
-    }).catch(() => {
-      // Ignore transient track errors during reconnect.
-    });
-  }, [roomId, nickname, avatar, amIHost, myPeerId, peers.length]);
 
   // Notify player ready — triggers sync request after YT player is initialized
   const notifyPlayerReady = useCallback(() => {
@@ -245,7 +177,8 @@ export function useSyncWatch({ roomId, nickname, avatar, isHost }: UseSyncWatchO
 
     channel
       .on("broadcast", { event: "sync" }, ({ payload }) => {
-        if (!isHostRef.current || guestControlRef.current) {
+        const amCurrentHost = hostIdRef.current === peerId;
+        if (!amCurrentHost || guestControlRef.current) {
           const state = payload as SyncState;
           setSyncState(state);
           showEvent(`${payload.from ?? "Host"} synced to ${formatTime(state.currentTime)}`);
@@ -270,7 +203,7 @@ export function useSyncWatch({ roomId, nickname, avatar, isHost }: UseSyncWatchO
         showEvent(`${payload.newHostNickname} is now the Host`);
       })
       .on("broadcast", { event: "request_sync" }, () => {
-        const amCurrentHost = hostIdRef.current === peerId || isHostRef.current;
+        const amCurrentHost = hostIdRef.current ? hostIdRef.current === peerId : isHostRef.current;
         if (amCurrentHost) {
           channel.send({
             type: "broadcast",
@@ -323,7 +256,7 @@ export function useSyncWatch({ roomId, nickname, avatar, isHost }: UseSyncWatchO
           }
         }
 
-        const amCurrentHost = hostIdRef.current === peerId || isHostRef.current;
+        const amCurrentHost = hostIdRef.current ? hostIdRef.current === peerId : isHostRef.current;
         if (hasRemoteJoin && amCurrentHost && onSyncRequestRef.current) {
           // Give the newcomer time to initialize, then push one authoritative snapshot.
           window.setTimeout(() => {
@@ -545,8 +478,4 @@ export function useSyncWatch({ roomId, nickname, avatar, isHost }: UseSyncWatchO
   };
 }
 
-function formatTime(seconds: number): string {
-  const m = Math.floor(seconds / 60);
-  const s = Math.floor(seconds % 60);
-  return `${m.toString().padStart(2, "0")}:${s.toString().padStart(2, "0")}`;
-}
+

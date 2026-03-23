@@ -4,6 +4,7 @@ import { Switch } from "@/components/ui/switch";
 import { useSettings } from "@/contexts/SettingsContext";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { cn } from "@/lib/utils";
+import { buildYouTubeEmbedUrl, buildYouTubeLiveChatUrl } from "@/lib/urls";
 
 const CINEMA_CHAT_PREF_KEY = "cinema-overlay-show-chat";
 
@@ -33,8 +34,7 @@ export function CinemaOverlay({ videoId, onClose, rememberChatPreference = true 
   const { t } = useSettings();
   const isMobile = useIsMobile();
   const embedDomain = getEmbedDomain();
-  const playerUrl = `https://www.youtube-nocookie.com/embed/${videoId}?autoplay=1&playsinline=1&rel=0&modestbranding=1&enablejsapi=1&origin=${encodeURIComponent(window.location.origin)}`;
-  const chatUrl = `https://www.youtube.com/live_chat?v=${videoId}&embed_domain=${embedDomain}`;
+  const chatUrl = buildYouTubeLiveChatUrl(videoId, embedDomain);
 
   useEffect(() => {
     setShowChat(rememberChatPreference ? loadSavedChatPreference() : false);
@@ -98,7 +98,7 @@ export function CinemaOverlay({ videoId, onClose, rememberChatPreference = true 
             className="aspect-video rounded-lg overflow-hidden flex-1 min-w-0 transition-all duration-300 ease-in-out"
           >
             <iframe
-              src={playerUrl}
+              src={buildYouTubeEmbedUrl(videoId, true)}
               className="w-full h-full"
               allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
               allowFullScreen

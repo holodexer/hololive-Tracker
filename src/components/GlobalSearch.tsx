@@ -15,6 +15,7 @@ import {
   CommandSeparator,
 } from "@/components/ui/command";
 import { getChannelPhotoUrl, getDisplayName } from "@/lib/utils";
+import { buildYouTubeThumbnailUrl, buildYouTubeWatchUrl } from "@/lib/urls";
 
 const OPEN_SEARCH_EVENT = "holodexer:open-search";
 
@@ -152,7 +153,7 @@ export function GlobalSearch() {
     setOpen(false);
 
     if (directYoutube) {
-      window.open(`https://www.youtube.com/watch?v=${video.id}`, "_blank", "noopener,noreferrer");
+      window.open(buildYouTubeWatchUrl(video.id), "_blank", "noopener,noreferrer");
       return;
     }
 
@@ -199,7 +200,7 @@ export function GlobalSearch() {
               {recentResults.map((video) => (
                 <CommandItem key={`recent-${video.id}`} value={`recent-${video.id}-${video.title}`} onSelect={() => openVideo(video)}>
                   <img
-                    src={video.thumbnail ?? `https://i.ytimg.com/vi/${video.id}/mqdefault.jpg`}
+                    src={video.thumbnail ?? buildYouTubeThumbnailUrl(video.id)}
                     alt={video.title}
                     className="mr-3 h-10 w-16 rounded object-cover"
                   />
@@ -231,13 +232,13 @@ export function GlobalSearch() {
                         id: video.id,
                         title: video.title,
                         channelName,
-                        thumbnail: `https://i.ytimg.com/vi/${video.id}/mqdefault.jpg`,
+                        thumbnail: buildYouTubeThumbnailUrl(video.id),
                         status: video.status,
                       })
                     }
                   >
                     <img
-                      src={`https://i.ytimg.com/vi/${video.id}/mqdefault.jpg`}
+                      src={buildYouTubeThumbnailUrl(video.id)}
                       alt={video.title}
                       className="mr-3 h-10 w-16 rounded object-cover"
                     />
