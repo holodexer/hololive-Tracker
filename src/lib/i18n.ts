@@ -240,10 +240,7 @@ export const translations = {
       guestStatusHint: "If playback drifts, you can request a fresh sync from the host.",
       lastSynced: "Last sync",
       syncThresholdLabel: "Drift threshold",
-      youtubeVerificationTitle: "YouTube requires verification for this video",
-      youtubeVerificationDesc: "This embedded player may be blocked until verification is completed in YouTube. Open it directly on YouTube, then come back and retry.",
-      openOnYoutube: "Open on YouTube",
-      retryLoad: "Retry",
+      tapToUnmute: "Tap to unmute",
     },
     // Cinema mode
     cinema: {
@@ -504,10 +501,7 @@ export const translations = {
       guestStatusHint: "如果播放不同步，可以手動向房主重新請求同步。",
       lastSynced: "最近同步",
       syncThresholdLabel: "誤差門檻",
-      youtubeVerificationTitle: "此影片需要先完成 YouTube 驗證",
-      youtubeVerificationDesc: "YouTube 內嵌播放器可能被驗證機制暫時阻擋。可先在 YouTube 開啟完成驗證後，再回來重試。",
-      openOnYoutube: "在 YouTube 開啟",
-      retryLoad: "重新載入",
+      tapToUnmute: "點一下開啟聲音",
     },
     // 劇場模式
     cinema: {
@@ -768,10 +762,7 @@ export const translations = {
       guestStatusHint: "ズレたときはホストへ再同期をリクエストできます。",
       lastSynced: "最終同期",
       syncThresholdLabel: "許容ズレ",
-      youtubeVerificationTitle: "この動画は YouTube 側の確認が必要です",
-      youtubeVerificationDesc: "埋め込みプレーヤーは YouTube の確認が完了するまで再生できない場合があります。YouTube で開いて確認後、再試行してください。",
-      openOnYoutube: "YouTube で開く",
-      retryLoad: "再試行",
+      tapToUnmute: "タップしてミュート解除",
     },
     // シネマモード
     cinema: {
