@@ -54,7 +54,7 @@ export function NicknameModal({ open, onConfirm, onCancel, locale = "en" }: Nick
             onChange={(e) => setName(e.target.value)}
             maxLength={20}
             autoFocus
-            onKeyDown={(e) => e.key === "Enter" && handleConfirm()}
+            onKeyDown={(e) => { if (e.key === "Enter") e.preventDefault(); }}
           />
           <div className="flex gap-2">
             <Button variant="ghost" onClick={onCancel} className="flex-1">

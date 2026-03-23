@@ -187,6 +187,7 @@ export const translations = {
       join: "Join",
       roomNotFound: "Room not found. Make sure the host is currently in the room.",
       roomValidationError: "Unable to verify this room right now. Please try again.",
+      invalidRoomId: "Invalid room ID. Room IDs only contain letters, numbers, and hyphens (e.g. abcd-123).",
       room: "Room",
       host: "HOST",
       guest: "GUEST",
@@ -241,6 +242,8 @@ export const translations = {
       lastSynced: "Last sync",
       syncThresholdLabel: "Drift threshold",
       tapToUnmute: "Tap to unmute",
+      roomList: "Room List",
+      noRooms: "No rooms yet — be the first to create one!",
     },
     // Cinema mode
     cinema: {
@@ -448,6 +451,7 @@ export const translations = {
       join: "加入",
       roomNotFound: "找不到此房間。請確認房主目前仍在線上房間內。",
       roomValidationError: "目前無法驗證此房間，請稍後再試。",
+      invalidRoomId: "無效的房間 ID，只能包含英文字母、數字和連字號（例如 abcd-123）。",
       room: "房間",
       host: "房主",
       guest: "訪客",
@@ -502,6 +506,8 @@ export const translations = {
       lastSynced: "最近同步",
       syncThresholdLabel: "誤差門檻",
       tapToUnmute: "點一下開啟聲音",
+      roomList: "房間列表",
+      noRooms: "目前沒有房間，成為第一個主持人吧！",
     },
     // 劇場模式
     cinema: {
@@ -709,6 +715,7 @@ export const translations = {
       join: "参加",
       roomNotFound: "ルームが見つかりません。ホストが現在そのルームにいるか確認してください。",
       roomValidationError: "現在このルームを確認できません。もう一度お試しください。",
+      invalidRoomId: "無効なルーム ID です。英数字とハイフンのみ使用できます（例: abcd-123）。",
       room: "ルーム",
       host: "ホスト",
       guest: "ゲスト",
@@ -763,6 +770,8 @@ export const translations = {
       lastSynced: "最終同期",
       syncThresholdLabel: "許容ズレ",
       tapToUnmute: "タップしてミュート解除",
+      roomList: "ルーム一覧",
+      noRooms: "現在ルームがありません。最初のホストになりましょう！",
     },
     // シネマモード
     cinema: {

@@ -1,12 +1,14 @@
 import { useState, useRef, useCallback, useEffect, useMemo } from "react";
 import { useSearchParams } from "react-router-dom";
-import { Radio, Copy, Plus, Users, RefreshCw, ArrowLeft, Film, Wifi, WifiOff, RotateCcw } from "lucide-react";
+import { Radio, Copy, Plus, Users, RefreshCw, ArrowLeft, Film, Wifi, WifiOff, RotateCcw, VolumeX } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useSyncWatch, generateRoomId, type SyncState } from "@/hooks/useSyncWatch";
 import { VideoQueue } from "@/components/sync/VideoQueue";
 import { ClipsOverlay } from "@/components/sync/ClipsOverlay";
+import { RoomCard } from "@/components/sync/RoomCard";
+import { useRoomsList, upsertRoom, deactivateRoom, heartbeatRoom, updateRoomInfo } from "@/hooks/useRoomsList";
 import { cn } from "@/lib/utils";
 import { useSettings } from "@/contexts/SettingsContext";
 import { supabase } from "@/integrations/supabase/client";
@@ -155,6 +157,41 @@ export default function SyncWatch() {
   useEffect(() => { effectiveHostRef.current = effectiveHost; }, [effectiveHost]);
   useEffect(() => { guestControlEnabledRef.current = guestControlEnabled; }, [guestControlEnabled]);
   useEffect(() => { currentVideoIdRef.current = currentVideoId; }, [currentVideoId]);
+
+  // Heartbeat: refresh updated_at every 30s so stale-room cleanup won't remove active rooms
+  useEffect(() => {
+    if (!roomId || !isHost) return;
+    const timerId = setInterval(() => heartbeatRoom(roomId), 30 * 1000);
+    return () => clearInterval(timerId);
+  }, [roomId, isHost]);
+
+  // Best-effort cleanup when the tab/window is closed directly
+  useEffect(() => {
+    if (!roomId || !isHost) return;
+    const handleBeforeUnload = () => {
+      const url = import.meta.env.VITE_SUPABASE_URL;
+      const key = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+      if (!url || !key) return;
+      // fetch with keepalive is guaranteed to be sent even after the page is closed
+      fetch(`${url}/rest/v1/rooms?id=eq.${encodeURIComponent(roomId)}`, {
+        method: 'DELETE',
+        headers: { apikey: key, Authorization: `Bearer ${key}` },
+        keepalive: true,
+      });
+    };
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [roomId, isHost]);
+
+  // Sync member count + host info whenever we are host or become new host
+  useEffect(() => {
+    if (!roomId || !amIHost) return;
+    updateRoomInfo(roomId, {
+      host_nickname: username,
+      host_avatar: avatar || null,
+      member_count: Math.max(peerCount, 1),
+    });
+  }, [roomId, amIHost, peerCount, username, avatar]);
 
   // Keep playNextRef current for YT callback
   const doPlayNext = useCallback(() => {
@@ -484,14 +521,22 @@ export default function SyncWatch() {
       return;
     }
     const id = generateRoomId();
+    // Persist room to Supabase so it appears in the lobby list
+    upsertRoom({ id, host_nickname: username, host_avatar: avatar || null, member_count: 1, status: 'active' });
     setRoomId(id);
     setIsHost(true);
     setSearchParams({ room: id });
-  }, [setSearchParams, username]);
+  }, [setSearchParams, username, avatar]);
 
   const joinRoomById = useCallback((rawRoomId: string) => {
-    const id = rawRoomId.trim();
+    const id = rawRoomId.trim().toLowerCase();
     if (!id || isJoiningRoom) return;
+
+    // Only allow room IDs matching the generateRoomId() format: [a-z0-9]+-[a-z0-9]+
+    if (!/^[a-z0-9]+(-[a-z0-9]+)+$/.test(id)) {
+      showValidationError(t.sync.invalidRoomId);
+      return;
+    }
 
     setIsJoiningRoom(true);
 
@@ -513,7 +558,7 @@ export default function SyncWatch() {
       .finally(() => {
         setIsJoiningRoom(false);
       });
-  }, [isJoiningRoom, setSearchParams, t.sync.roomNotFound, t.sync.roomValidationError, username]);
+  }, [isJoiningRoom, setSearchParams, t.sync.roomNotFound, t.sync.roomValidationError, t.sync.invalidRoomId, username]);
 
   const handleJoinRoom = useCallback(() => {
     const id = joinInput.trim();
@@ -526,11 +571,13 @@ export default function SyncWatch() {
     setNeedsNickname(false);
     if (!roomId) {
       const id = generateRoomId();
+      // upsertRoom here because handleCreateRoom was bypassed via NicknameModal
+      upsertRoom({ id, host_nickname: name, host_avatar: avatar || null, member_count: 1, status: 'active' });
       setRoomId(id);
       setIsHost(true);
       setSearchParams({ room: id });
     }
-  }, [roomId, setSearchParams, setUsername]);
+  }, [roomId, setSearchParams, setUsername, avatar]);
 
   const handleLoadVideo = useCallback(() => {
     if (!effectiveHost && !guestControlEnabled) return;
@@ -582,6 +629,12 @@ export default function SyncWatch() {
   }, [roomId, t.sync.inviteCopied]);
 
   const handleLeaveRoom = useCallback(() => {
+    // Only delete the room row if we are the last person in it.
+    // If there are other members, the new host (oldest remaining peer) will
+    // update host_nickname/host_avatar via the amIHost effect above.
+    if (roomId && peerCount <= 1 && (amIHost || isHost)) {
+      deactivateRoom(roomId);
+    }
     clearSession();
     resetState();
     setRoomId(null);
@@ -594,7 +647,7 @@ export default function SyncWatch() {
       playerRef.current = null;
     }
     setSearchParams({});
-  }, [setSearchParams, resetState]);
+  }, [setSearchParams, resetState, amIHost, isHost, roomId, peerCount]);
 
   const handleToggleGuestControl = useCallback((enabled: boolean) => {
     toggleGuestControl(enabled, enabled ? null : getHostState());
@@ -670,47 +723,16 @@ export default function SyncWatch() {
 
   // Lobby
   if (!roomId) {
-    return (
-      <div className="flex items-center justify-center min-h-[calc(100dvh-9rem)] px-3">
-        <div className="w-full max-w-lg space-y-6">
-          <div className="text-center space-y-2">
-            <Radio className="w-12 h-12 text-primary mx-auto" />
-            <h1 className="text-3xl font-bold text-foreground">{t.sync.syncWatch}</h1>
-            <p className="text-muted-foreground text-sm">{t.sync.createDesc}</p>
-          </div>
-
-          <div className="space-y-4">
-            <Button
-              onClick={handleCreateRoom}
-              className="w-full gap-2 min-h-[48px]"
-              size="lg"
-            >
-              <Plus className="w-5 h-5" />
-              {t.sync.createRoom}
-            </Button>
-
-            <div className="flex items-center gap-2">
-              <div className="flex-1 h-px bg-border" />
-              <span className="text-xs text-muted-foreground uppercase tracking-wider">{t.sync.orJoin}</span>
-              <div className="flex-1 h-px bg-border" />
-            </div>
-
-            <div className={cn("gap-2", isMobile ? "grid grid-cols-1" : "flex")}>
-              <Input
-                placeholder={t.sync.enterRoom}
-                value={joinInput}
-                onChange={(e) => setJoinInput(e.target.value)}
-                className="flex-1 min-h-[48px]"
-                disabled={isJoiningRoom}
-              />
-              <Button onClick={handleJoinRoom} variant="secondary" className="min-h-[48px]" disabled={isJoiningRoom || !joinInput.trim()}>
-                {isJoiningRoom ? t.common.loading : t.sync.join}
-              </Button>
-            </div>
-          </div>
-        </div>
-      </div>
-    );
+    return <LobbyView
+      t={t}
+      isMobile={isMobile}
+      joinInput={joinInput}
+      setJoinInput={setJoinInput}
+      isJoiningRoom={isJoiningRoom}
+      handleCreateRoom={handleCreateRoom}
+      handleJoinRoom={handleJoinRoom}
+      joinRoomById={joinRoomById}
+    />;
   }
 
 
@@ -999,10 +1021,15 @@ export default function SyncWatch() {
                 />
               )}
               {!effectiveHost && needsGuestUnmute && currentMedia?.source === "youtube" && (
-                <div className="absolute left-3 bottom-3 z-30">
-                  <Button size="sm" variant="secondary" className="shadow-lg" onClick={handleGuestUnmute}>
+                <div className="absolute inset-0 z-30 flex items-center justify-center pointer-events-none">
+                  <button
+                    onClick={handleGuestUnmute}
+                    className="pointer-events-auto relative flex items-center gap-2 rounded-lg bg-card/80 backdrop-blur-md border border-border px-5 py-2.5 text-foreground text-sm font-medium shadow-lg hover:bg-card hover:border-primary/50 active:scale-95 transition-all duration-150"
+                  >
+                    <span className="absolute inset-0 rounded-lg animate-pulse bg-primary/5" />
+                    <VolumeX className="w-4 h-4 shrink-0 text-primary" />
                     {t.sync.tapToUnmute}
-                  </Button>
+                  </button>
                 </div>
               )}
             </div>
@@ -1024,6 +1051,104 @@ export default function SyncWatch() {
     </div>
   );
 }
+
+// ---------- LobbyView ----------
+
+interface LobbyViewProps {
+  t: ReturnType<typeof useSettings>["t"];
+  isMobile: boolean;
+  joinInput: string;
+  setJoinInput: (v: string) => void;
+  isJoiningRoom: boolean;
+  handleCreateRoom: () => void;
+  handleJoinRoom: () => void;
+  joinRoomById: (id: string) => void;
+}
+
+function LobbyView({
+  t, isMobile, joinInput, setJoinInput,
+  isJoiningRoom, handleCreateRoom, handleJoinRoom, joinRoomById,
+}: LobbyViewProps) {
+  const { rooms, isLoading: isLoadingRooms } = useRoomsList();
+
+  return (
+    <div className="min-h-[calc(100dvh-9rem)] flex flex-col items-center justify-center px-3 py-8 gap-8">
+      {/* Hero / create-join section */}
+      <div className="w-full max-w-lg space-y-6">
+          <div className="text-center space-y-2">
+            <Radio className="w-12 h-12 text-primary mx-auto" />
+            <h1 className="text-3xl font-bold text-foreground">{t.sync.syncWatch}</h1>
+            <p className="text-muted-foreground text-sm">{t.sync.createDesc}</p>
+          </div>
+
+          <div className="space-y-4">
+            <Button
+              onClick={handleCreateRoom}
+              className="w-full gap-2 min-h-[48px]"
+              size="lg"
+            >
+              <Plus className="w-5 h-5" />
+              {t.sync.createRoom}
+            </Button>
+
+            <div className="flex items-center gap-2">
+              <div className="flex-1 h-px bg-border" />
+              <span className="text-xs text-muted-foreground uppercase tracking-wider">{t.sync.orJoin}</span>
+              <div className="flex-1 h-px bg-border" />
+            </div>
+
+            <div className={cn("gap-2", isMobile ? "grid grid-cols-1" : "flex")}>
+              <Input
+                placeholder={t.sync.enterRoom}
+                value={joinInput}
+                onChange={(e) => setJoinInput(e.target.value)}
+                className="flex-1 min-h-[48px]"
+                disabled={isJoiningRoom}
+                onKeyDown={(e) => e.key === "Enter" && handleJoinRoom()}
+              />
+              <Button
+                onClick={handleJoinRoom}
+                variant="secondary"
+                className="min-h-[48px]"
+                disabled={isJoiningRoom || !joinInput.trim()}
+              >
+                {isJoiningRoom ? t.common.loading : t.sync.join}
+              </Button>
+            </div>
+          </div>
+        </div>
+
+      {/* Room list */}
+      <div className="w-full max-w-2xl mx-auto">
+        <div className="flex items-center gap-4 mb-6">
+          <div className="flex-1 h-px bg-border/60" />
+          <span className="text-xs font-semibold text-muted-foreground uppercase tracking-widest shrink-0">
+            {t.sync.roomList}
+          </span>
+          <div className="flex-1 h-px bg-border/60" />
+        </div>
+        {isLoadingRooms ? (
+          <p className="text-center text-xs text-muted-foreground py-4">{t.common.loading}</p>
+        ) : rooms.length === 0 ? (
+          <p className="text-center text-xs text-muted-foreground py-4">{t.sync.noRooms}</p>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            {rooms.map((room) => (
+              <RoomCard
+                key={room.id}
+                room={room}
+                onJoin={joinRoomById}
+                isJoining={isJoiningRoom}
+              />
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ---------- validateRoomExists ----------
 
 async function validateRoomExists(roomId: string): Promise<boolean> {
   const probe = supabase.channel(`sync-watch:${roomId}`);

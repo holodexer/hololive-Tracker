@@ -14,13 +14,49 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      rooms: {
+        Row: {
+          id: string
+          host_nickname: string
+          host_avatar: string | null
+          member_count: number
+          status: 'active' | 'inactive'
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id: string
+          host_nickname: string
+          host_avatar?: string | null
+          member_count?: number
+          status?: 'active' | 'inactive'
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          host_nickname?: string
+          host_avatar?: string | null
+          member_count?: number
+          status?: 'active' | 'inactive'
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      increment_room_members: {
+        Args: { room_id: string }
+        Returns: undefined
+      }
+      decrement_room_members: {
+        Args: { room_id: string }
+        Returns: undefined
+      }
     }
     Enums: {
       [_ in never]: never
