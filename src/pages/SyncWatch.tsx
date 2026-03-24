@@ -1,6 +1,6 @@
 import { useState, useRef, useCallback, useEffect, useMemo } from "react";
 import { useSearchParams } from "react-router-dom";
-import { Radio, Copy, Plus, Users, RefreshCw, ArrowLeft, Film, Wifi, WifiOff, RotateCcw, VolumeX, Settings2, X } from "lucide-react";
+import { Radio, Copy, Plus, Users, RefreshCw, ArrowLeft, Wifi, WifiOff, RotateCcw, VolumeX, Play } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -89,6 +89,7 @@ export default function SyncWatch() {
   const [isValidatingInitialRoom, setIsValidatingInitialRoom] = useState(Boolean(initialRoomCandidate && !initialHost));
   const [sidebarTab, setSidebarTab] = useState<"members" | "chat" | "log" | "queue">("members");
   const [countdown, setCountdown] = useState<{ videoId: string; title?: string } | null>(null);
+  const [mobileSection, setMobileSection] = useState<"sidebar" | "collapsed">("sidebar");
   const [showClips, setShowClips] = useState(false);
   const [clipsActiveTab, setClipsActiveTab] = useState<"live" | "archives" | "clips" | "playlists">("live");
 
@@ -153,7 +154,7 @@ export default function SyncWatch() {
         };
     }
   }, [connectionStatus, t.sync.connected, t.sync.reconnecting, t.sync.connectionError, t.sync.connecting]);
-  const [showControlsDrawer, setShowControlsDrawer] = useState(false);
+  const canControlVideo = effectiveHost || guestControlEnabled;
   useEffect(() => { effectiveHostRef.current = effectiveHost; }, [effectiveHost]);
   useEffect(() => { guestControlEnabledRef.current = guestControlEnabled; }, [guestControlEnabled]);
   useEffect(() => { currentVideoIdRef.current = currentVideoId; }, [currentVideoId]);
@@ -741,24 +742,41 @@ export default function SyncWatch() {
   const sidebar = (
     <div
       className={cn(
-        "rounded-lg border border-border/50 bg-card/40 overflow-hidden flex flex-col",
-        "w-[300px] shrink-0"
+        "overflow-hidden flex flex-col",
+        isMobile
+          ? "w-full flex-1 min-h-0 rounded-2xl border border-border/60 bg-card/60"
+          : "w-[300px] shrink-0 rounded-lg border border-border/50 bg-card/40"
       )}
       style={{
-        ...(playerHeight ? { maxHeight: playerHeight } : {}),
+        ...(isMobile
+          ? (mobileSection === "collapsed" ? { height: "auto" } : { minHeight: 0, flex: 1 })
+          : playerHeight ? { maxHeight: playerHeight } : {}
+        ),
       }}
     >
 
-      <div className="border-b border-border/30 bg-card/60 flex">
+      <div className={cn(
+        "border-b border-border/30",
+        isMobile ? "flex bg-card/60" : "flex bg-card/60"
+      )}>
         {(["members", "chat", "queue", "log"] as const).map((tab) => (
           <button
             key={tab}
-            onClick={() => setSidebarTab(tab)}
+            onClick={() => {
+              setSidebarTab(tab);
+              if (isMobile) setMobileSection("sidebar");
+            }}
             className={cn(
-              "flex-1 text-xs min-h-[44px] font-medium transition-colors",
+              isMobile
+                ? "flex-1 text-xs min-h-[44px] font-medium transition-colors"
+                : "flex-1 text-xs min-h-[44px] font-medium transition-colors",
               sidebarTab === tab
-                ? "text-primary border-b-2 border-primary"
-                : "text-muted-foreground hover:text-foreground"
+                ? isMobile
+                  ? "text-primary border-b-2 border-primary"
+                  : "text-primary border-b-2 border-primary"
+                : isMobile
+                  ? "text-muted-foreground hover:text-foreground"
+                  : "text-muted-foreground hover:text-foreground"
             )}
           >
             {tab === "members" ? `${t.sync.members} (${peerCount})`
@@ -769,409 +787,216 @@ export default function SyncWatch() {
         ))}
       </div>
 
-      <div className="flex-1 min-h-0 overflow-hidden">
-        {sidebarTab === "members" && (
-          <div className={`p-3 overflow-y-auto h-full ${TAB_PANEL_TRANSITION_CLASS}`}>
-            <UserList
-              peers={peers}
-              myPeerId={myPeerId}
-              amIHost={effectiveHost}
-              guestControlEnabled={guestControlEnabled}
-              onToggleGuestControl={handleToggleGuestControl}
-              locale={locale}
-            />
-          </div>
-        )}
-        {sidebarTab === "chat" && (
-          <div className={`h-full ${TAB_PANEL_TRANSITION_CLASS} flex flex-col`}>
-            {currentMedia?.source === "youtube" ? (
-              <iframe
-                key={currentMedia.value}
-                src={buildYouTubeLiveChatUrl(currentMedia.value, window.location.hostname)}
-                className="w-full flex-1 border-0"
-                allow="clipboard-write"
-                title="YouTube Live Chat"
+      {(!isMobile || mobileSection !== "collapsed") && (
+        <div className="flex-1 min-h-0 overflow-hidden">
+          {sidebarTab === "members" && (
+            <div className={`p-3 overflow-y-auto h-full ${TAB_PANEL_TRANSITION_CLASS}`}>
+              <UserList
+                peers={peers}
+                myPeerId={myPeerId}
+                amIHost={effectiveHost}
+                guestControlEnabled={guestControlEnabled}
+                onToggleGuestControl={handleToggleGuestControl}
+                locale={locale}
               />
-            ) : (
-              <div className="flex flex-col items-center justify-center h-full gap-2 text-muted-foreground text-xs text-center p-4 opacity-60">
-                <span>播放 YouTube 影片後</span>
-                <span>即可顯示直播聊天室</span>
-              </div>
-            )}
-          </div>
-        )}
-        {sidebarTab === "queue" && (
-          <div className={`h-full ${TAB_PANEL_TRANSITION_CLASS}`}>
-            <VideoQueue
-              queue={queue}
-              isHost={effectiveHost || (guestControlEnabled && !!roomId)}
-              onAdd={addToQueue}
-              onRemove={removeFromQueue}
-              onMove={moveInQueue}
-              onPlay={handlePlayFromQueue}
-              locale={locale}
-            />
-          </div>
-        )}
-        {sidebarTab === "log" && (
-          <div className={`h-full min-h-0 ${TAB_PANEL_TRANSITION_CLASS}`}>
-            <SystemMessages messages={systemMessages} />
-          </div>
-        )}
-      </div>
+            </div>
+          )}
+          {sidebarTab === "chat" && (
+            <div className={`h-full ${TAB_PANEL_TRANSITION_CLASS} flex flex-col`}>
+              {currentMedia?.source === "youtube" ? (
+                <iframe
+                  key={currentMedia.value}
+                  src={buildYouTubeLiveChatUrl(currentMedia.value, window.location.hostname)}
+                  className="w-full flex-1 border-0"
+                  allow="clipboard-write"
+                  title="YouTube Live Chat"
+                />
+              ) : (
+                <div className="flex flex-col items-center justify-center h-full gap-2 text-muted-foreground text-xs text-center p-4 opacity-60">
+                  <span>播放 YouTube 影片後</span>
+                  <span>即可顯示直播聊天室</span>
+                </div>
+              )}
+            </div>
+          )}
+          {sidebarTab === "queue" && (
+            <div className={`h-full ${TAB_PANEL_TRANSITION_CLASS}`}>
+              <VideoQueue
+                queue={queue}
+                isHost={effectiveHost || (guestControlEnabled && !!roomId)}
+                onAdd={addToQueue}
+                onRemove={removeFromQueue}
+                onMove={moveInQueue}
+                onPlay={handlePlayFromQueue}
+                locale={locale}
+              />
+            </div>
+          )}
+          {sidebarTab === "log" && (
+            <div className={`h-full min-h-0 ${TAB_PANEL_TRANSITION_CLASS}`}>
+              <SystemMessages messages={systemMessages} />
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 
-  // Active room — mobile early return
-  if (isMobile) {
-    return (
-      <div className="flex flex-col overflow-hidden" style={mobileViewportStyle}>
-        {/* compact 1-line info bar */}
-        <div className="shrink-0 flex items-center gap-2 px-3 py-2 bg-card/90 border-b border-border/40">
-          <Radio className="w-3.5 h-3.5 text-primary shrink-0" />
-          <span className="text-xs font-mono text-muted-foreground truncate flex-1">{roomId}</span>
-          <span className={cn(
-            "text-[10px] px-1.5 py-0.5 rounded font-semibold shrink-0",
-            effectiveHost ? "bg-primary/20 text-primary" : "bg-secondary text-secondary-foreground"
-          )}>
-            {effectiveHost ? t.sync.host : t.sync.guest}
-          </span>
-          <div className={cn("inline-flex items-center gap-1 rounded-full border px-1.5 py-0.5 shrink-0", connectionBadge.className)}>
-            <connectionBadge.icon className={cn("w-2.5 h-2.5", (connectionStatus === "connecting" || connectionStatus === "reconnecting") && "animate-spin")} />
-          </div>
-          <div className="flex items-center gap-1 text-xs text-muted-foreground shrink-0">
-            <Users className="w-3 h-3" />
-            <span>{peerCount}</span>
-          </div>
-        </div>
-
-        {/* video player — no padding, sticks right under info bar */}
-        <div ref={playerAreaRef} className="shrink-0 w-full bg-black">
-          {currentVideoId ? (
-            <div className="aspect-video relative">
-              <div
-                ref={playerContainerRef}
-                className="absolute inset-0"
-                style={{ display: currentMedia?.source === "youtube" ? "block" : "none" }}
-              />
-              <video
-                ref={directVideoRef}
-                playsInline
-                controls
-                className="w-full h-full"
-                style={{ display: currentMedia?.source === "direct" ? "block" : "none" }}
-                onLoadedMetadata={handleDirectVideoReady}
-                onPlay={handleDirectVideoSync}
-                onPause={handleDirectVideoSync}
-                onSeeked={handleDirectVideoSync}
-                onEnded={handleDirectVideoEnded}
-              />
-              {countdown && (
-                <QueueCountdown
-                  nextTitle={countdown.title}
-                  duration={5}
-                  onComplete={doPlayNext}
-                  onCancel={() => setCountdown(null)}
-                />
-              )}
-              {!effectiveHost && needsGuestUnmute && currentMedia?.source === "youtube" && (
-                <div className="absolute inset-0 z-30 flex items-center justify-center pointer-events-none">
-                  <button
-                    onClick={handleGuestUnmute}
-                    className="pointer-events-auto relative flex items-center gap-2 rounded-lg bg-card/80 backdrop-blur-md border border-border px-5 py-2.5 text-foreground text-sm font-medium shadow-lg"
-                  >
-                    <span className="absolute inset-0 rounded-lg animate-pulse bg-primary/5" />
-                    <VolumeX className="w-4 h-4 shrink-0 text-primary" />
-                    {t.sync.tapToUnmute}
-                  </button>
-                </div>
-              )}
-            </div>
-          ) : (
-            <div className="aspect-video flex items-center justify-center">
-              <div className="text-center space-y-2">
-                <Radio className="w-8 h-8 text-muted-foreground mx-auto opacity-40" />
-                <p className="text-muted-foreground text-sm">{effectiveHost ? t.sync.hostWaiting : t.sync.guestWaiting}</p>
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* member list — flex-1 fills rest of viewport */}
-        <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
-          <div className="shrink-0 flex items-center justify-between px-3 py-2 bg-card/70 border-b border-border/30">
-            <span className="text-sm font-semibold text-foreground">{t.sync.members}</span>
-            <span className="text-xs bg-muted/60 rounded-full px-2 py-0.5 text-muted-foreground">{peerCount}</span>
-          </div>
-          <div className="flex-1 min-h-0 overflow-y-auto p-3">
-            <UserList
-              peers={peers}
-              myPeerId={myPeerId}
-              amIHost={effectiveHost}
-              guestControlEnabled={guestControlEnabled}
-              onToggleGuestControl={handleToggleGuestControl}
-              locale={locale}
-            />
-          </div>
-        </div>
-
-        {/* FAB — opens controls bottom drawer */}
-        <button
-          onClick={() => setShowControlsDrawer(true)}
-          className="fixed bottom-[calc(6.25rem+env(safe-area-inset-bottom,0px)+0.75rem)] right-4 z-40 w-12 h-12 rounded-full bg-primary text-primary-foreground shadow-lg flex items-center justify-center active:scale-95 transition-transform"
-          aria-label="控制面板"
-        >
-          <Settings2 className="w-5 h-5" />
-        </button>
-
-        {/* Controls bottom drawer */}
-        {showControlsDrawer && (
-          <div className="fixed inset-0 z-50">
-            <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setShowControlsDrawer(false)} />
-            <div
-              className="absolute bottom-0 left-0 right-0 rounded-t-2xl bg-card border-t border-border overflow-y-auto"
-              style={{ maxHeight: "80dvh", paddingBottom: "env(safe-area-inset-bottom,0px)" }}
-            >
-              <div className="flex justify-center pt-3 pb-1">
-                <div className="w-10 h-1 rounded-full bg-muted-foreground/30" />
-              </div>
-              <div className="flex items-center justify-between px-4 py-2 border-b border-border/40">
-                <span className="text-sm font-semibold">{t.sync.syncWatch}</span>
-                <button onClick={() => setShowControlsDrawer(false)} className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-muted transition-colors">
-                  <X className="w-4 h-4" />
-                </button>
-              </div>
-              <div className="p-4 space-y-4">
-                <div className="grid grid-cols-2 gap-2">
-                  <Button size="sm" variant="secondary" className="gap-1.5 min-h-[46px]" onClick={handleRequestResync}>
-                    <RotateCcw className="w-3.5 h-3.5" />
-                    {t.sync.resyncNow}
-                  </Button>
-                  <Button size="sm" variant="outline" className="gap-1.5 min-h-[46px]" onClick={copyInviteLink}>
-                    <Copy className="w-3.5 h-3.5" />
-                    {t.sync.copyInvite}
-                  </Button>
-                </div>
-                <Button size="sm" variant="ghost" className="w-full gap-1.5 min-h-[46px] text-destructive" onClick={handleLeaveRoom}>
-                  <ArrowLeft className="w-3.5 h-3.5" />
-                  {t.sync.leave}
-                </Button>
-
-                {(effectiveHost || guestControlEnabled) ? (
-                  <div className="space-y-2 pt-1 border-t border-border/30">
-                    <span className={cn(
-                      "inline-flex text-[10px] font-semibold uppercase tracking-wider px-2 py-1 rounded",
-                      guestControlEnabled
-                        ? "bg-emerald-500/15 text-emerald-500 border border-emerald-500/25"
-                        : "bg-primary/15 text-primary border border-primary/25"
-                    )}>
-                      {guestControlEnabled ? t.sync.freeControl : t.sync.hostMode}
-                    </span>
-                    <Input
-                      placeholder={t.sync.pasteUrl}
-                      value={videoInput}
-                      onChange={(e) => setVideoInput(e.target.value)}
-                      className="min-h-[46px]"
-                      onKeyDown={(e) => e.key === "Enter" && handleLoadVideo()}
-                    />
-                    <div className="grid grid-cols-2 gap-2">
-                      <Button onClick={handleLoadVideo} className="gap-1.5 min-h-[46px]">{t.sync.loadVideo}</Button>
-                      <Button onClick={() => { setShowClips(true); setShowControlsDrawer(false); }} variant="outline" className="gap-1.5 min-h-[46px]">
-                        <Film className="w-4 h-4" />
-                        {t.sync.openClips}
-                      </Button>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="flex items-center gap-2 px-3 py-2.5 rounded-md border border-border/40 bg-muted/30 text-muted-foreground text-sm select-none">
-                    <Radio className="w-4 h-4 opacity-50 shrink-0" />
-                    {t.sync.hostOnlyVideo}
-                  </div>
-                )}
-
-                <div className="pt-1 border-t border-border/30 space-y-2">
-                  <div className="flex gap-1 rounded-lg bg-muted/40 p-1">
-                    {(["chat", "queue", "log"] as const).map((tab) => (
-                      <button
-                        key={tab}
-                        onClick={() => setSidebarTab(tab)}
-                        className={cn(
-                          "flex-1 min-h-[38px] rounded-md text-xs font-medium transition-colors",
-                          sidebarTab === tab ? "bg-card text-primary shadow-sm" : "text-muted-foreground hover:text-foreground"
-                        )}
-                      >
-                        {tab === "chat" ? t.sync.chat : tab === "queue" ? `${t.sync.queue}${queue.length > 0 ? ` (${queue.length})` : ""}` : t.sync.log}
-                      </button>
-                    ))}
-                  </div>
-                  <div className="rounded-lg border border-border/40 bg-card/60 overflow-hidden" style={{ height: "38dvh" }}>
-                    {sidebarTab === "chat" && (
-                      <div className={`h-full ${TAB_PANEL_TRANSITION_CLASS} flex flex-col`}>
-                        {currentMedia?.source === "youtube" ? (
-                          <iframe key={currentMedia.value} src={buildYouTubeLiveChatUrl(currentMedia.value, window.location.hostname)} className="w-full h-full border-0" allow="clipboard-write" title="YouTube Live Chat" />
-                        ) : (
-                          <div className="flex flex-col items-center justify-center h-full gap-2 text-muted-foreground text-xs text-center p-4 opacity-60">
-                            <span>播放 YouTube 影片後</span>
-                            <span>即可顯示直播聊天室</span>
-                          </div>
-                        )}
-                      </div>
-                    )}
-                    {sidebarTab === "queue" && (
-                      <div className={`h-full ${TAB_PANEL_TRANSITION_CLASS}`}>
-                        <VideoQueue queue={queue} isHost={effectiveHost || (guestControlEnabled && !!roomId)} onAdd={addToQueue} onRemove={removeFromQueue} onMove={moveInQueue} onPlay={handlePlayFromQueue} locale={locale} />
-                      </div>
-                    )}
-                    {sidebarTab === "log" && (
-                      <div className={`h-full min-h-0 ${TAB_PANEL_TRANSITION_CLASS}`}>
-                        <SystemMessages messages={systemMessages} />
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                {lastEvent && (
-                  <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-primary/10 border border-primary/20 text-sm text-primary">
-                    <RefreshCw className="w-4 h-4 animate-spin" />
-                    {lastEvent}
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-        )}
-
-        <ClipsOverlay
-          open={showClips}
-          onClose={() => setShowClips(false)}
-          onSelectClip={handleSelectClip}
-          onTabChange={setClipsActiveTab}
-          activeTab={clipsActiveTab}
-          locale={locale}
-          labels={{
-            clipsTitle: t.sync.clipsTitle,
-            clipsTab: t.favorites.clips,
-            archivesTab: t.favorites.archives,
-            favoriteOnly: t.sync.favoriteOnly,
-            selectClipToAdd: t.sync.selectClipToAdd,
-            selectLiveToAdd: t.sync.selectLiveToAdd,
-            selectArchiveToAdd: t.sync.selectArchiveToAdd,
-            noClipsFound: t.sync.noClipsFound,
-            noArchivesFound: t.sync.noArchivesFound,
-            clipsLoading: t.sync.clipsLoading,
-            archivesLoading: t.sync.archivesLoading,
-            loadMore: t.common.loadMore,
-            loading: t.common.loading,
-            liveNow: t.sync.liveNow,
-            noLive: t.sync.noLive,
-            playlistsTab: t.sidebar.playlists,
-          }}
-        />
-      </div>
-    );
-  }
-
-  // Active room — desktop layout
+  // Active room
   return (
-    <div className="space-y-3">
+    <div
+      className={cn(
+        "space-y-3",
+        isMobile && "flex flex-col overflow-hidden rounded-2xl border border-border/60 bg-background/95 p-2"
+      )}
+      style={mobileViewportStyle}
+    >
       {/* Room header */}
-
-          <div className="shrink-0 gap-2 md:gap-3 flex flex-wrap items-center">
-            <div className="flex items-center gap-2">
+      {isMobile ? (
+        <div className="shrink-0 rounded-3xl border border-border/60 bg-card/40 px-3 py-2 shadow-sm">
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2 min-w-0">
               <Radio className="w-5 h-5 text-primary" />
-              <h1 className="text-xl font-bold text-foreground">{t.sync.syncWatch}</h1>
+              <h1 className="text-base font-bold text-foreground truncate">{t.sync.syncWatch}</h1>
             </div>
-
-            <div className="flex items-center gap-2 rounded-2xl border border-border bg-card px-3 py-2">
-              <span className="text-xs text-muted-foreground font-mono">{t.sync.room}: {roomId}</span>
+            <div className="flex items-center gap-1 shrink-0">
               <span className={cn(
-                "text-xs px-1.5 py-0.5 rounded font-semibold",
-                effectiveHost ? "bg-primary/20 text-primary" : "bg-secondary text-secondary-foreground"
+                "inline-flex items-center justify-center h-7 min-w-7 px-1.5 rounded-md border text-[10px] font-medium",
+                effectiveHost ? "border-primary/35 bg-primary/10 text-primary" : "border-border bg-card text-muted-foreground"
               )}>
                 {effectiveHost ? t.sync.host : t.sync.guest}
               </span>
-            </div>
-
-            <div className="flex items-center gap-1 rounded-2xl border border-border/60 bg-card/60 px-3 py-2 text-xs text-muted-foreground">
-              <Users className="w-3.5 h-3.5" />
-              <span>{peerCount}</span>
-            </div>
-
-            <div className={cn(
-              "flex items-center gap-2 rounded-2xl border px-3 py-2 text-xs font-medium",
-              connectionBadge.className
-            )}>
-              <connectionBadge.icon
-                className={cn(
-                  "w-3.5 h-3.5",
-                  (connectionStatus === "connecting" || connectionStatus === "reconnecting") && "animate-spin"
-                )}
-              />
-              <span>{connectionBadge.label}</span>
-            </div>
-
-            <div className="flex items-center gap-2 ml-auto">
-              <Button size="sm" variant="secondary" className="gap-1.5" onClick={handleRequestResync}>
-                <RotateCcw className="w-3.5 h-3.5" />
-                <span>{t.sync.resyncNow}</span>
+              <span className="inline-flex items-center justify-center h-7 min-w-7 px-1.5 rounded-md border border-border bg-card text-[10px] text-muted-foreground">
+                <Users className="w-3 h-3 mr-1" />
+                {peerCount}
+              </span>
+              <span className={cn("inline-flex items-center justify-center h-7 w-7 rounded-md border", connectionBadge.className)}>
+                <connectionBadge.icon className={cn("w-3 h-3", (connectionStatus === "connecting" || connectionStatus === "reconnecting") && "animate-spin")} />
+              </span>
+              <Button size="icon" variant="outline" className="h-7 w-7" onClick={handleRequestResync}>
+                <RotateCcw className="w-3 h-3" />
+                <span className="sr-only">{t.sync.resyncNow}</span>
               </Button>
-              <Button size="sm" variant="outline" className="gap-1.5" onClick={copyInviteLink}>
-                <Copy className="w-3.5 h-3.5" />
-                <span>{t.sync.copyInvite}</span>
+              <Button size="icon" variant="outline" className="h-7 w-7" onClick={copyInviteLink}>
+                <Copy className="w-3 h-3" />
+                <span className="sr-only">{t.sync.copyInvite}</span>
               </Button>
-              <Button size="sm" variant="ghost" className="gap-1.5 text-destructive" onClick={handleLeaveRoom}>
-                <ArrowLeft className="w-3.5 h-3.5" />
-                <span>{t.sync.leave}</span>
+              <Button size="icon" variant="outline" className="h-7 w-7 text-destructive" onClick={handleLeaveRoom}>
+                <ArrowLeft className="w-3 h-3" />
+                <span className="sr-only">{t.sync.leave}</span>
               </Button>
             </div>
           </div>
+        </div>
+      ) : (
+        <div className="shrink-0 gap-2 md:gap-3 flex flex-wrap items-center">
+          <div className="flex items-center gap-2">
+            <Radio className="w-5 h-5 text-primary" />
+            <h1 className="text-xl font-bold text-foreground">{t.sync.syncWatch}</h1>
+          </div>
 
-          {(effectiveHost || guestControlEnabled) ? (
-            <div className="shrink-0 flex items-center gap-2">
-              <span className={cn(
-                "text-[10px] font-semibold uppercase tracking-wider px-2 py-1 rounded shrink-0 hidden sm:block",
-                guestControlEnabled
-                  ? "bg-emerald-500/15 text-emerald-500 border border-emerald-500/25"
-                  : "bg-primary/15 text-primary border border-primary/25"
-              )}>
-                {guestControlEnabled ? t.sync.freeControl : t.sync.hostMode}
-              </span>
-              <div className="flex flex-1 items-center gap-2">
-                <Input
-                  placeholder={t.sync.pasteUrl}
-                  value={videoInput}
-                  onChange={(e) => setVideoInput(e.target.value)}
-                  className="flex-1"
-                  onKeyDown={(e) => e.key === "Enter" && handleLoadVideo()}
-                />
-                <div className="flex items-center gap-2">
-                  <Button onClick={handleLoadVideo} className="gap-1.5 shrink-0">
-                    {t.sync.loadVideo}
-                  </Button>
-                  <Button
-                    onClick={() => setShowClips(true)}
-                    variant="outline"
-                    className="gap-1.5 shrink-0"
-                  >
-                    <Film className="w-4 h-4" />
-                    {t.sync.openClips}
-                  </Button>
-                </div>
-              </div>
-            </div>
-          ) : (
-            <div className="flex items-center gap-2 px-3 py-2.5 rounded-md border border-border/40 bg-muted/30 text-muted-foreground text-sm select-none shrink-0">
-              <Radio className="w-4 h-4 opacity-50 shrink-0" />
-              <span>{t.sync.hostOnlyVideo}</span>
-            </div>
-          )}
+          <div className="flex items-center gap-2 rounded-2xl border border-border bg-card px-3 py-2">
+            <span className="text-xs text-muted-foreground font-mono">{t.sync.room}: {roomId}</span>
+            <span className={cn(
+              "text-xs px-1.5 py-0.5 rounded font-semibold",
+              effectiveHost ? "bg-primary/20 text-primary" : "bg-secondary text-secondary-foreground"
+            )}>
+              {effectiveHost ? t.sync.host : t.sync.guest}
+            </span>
+          </div>
 
-          {lastEvent && (
-            <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-primary/10 border border-primary/20 text-sm text-primary animate-in fade-in slide-in-from-top-2 duration-300 shrink-0">
-              <RefreshCw className="w-4 h-4 animate-spin" />
-              {lastEvent}
-            </div>
+          <div className="flex items-center gap-1 rounded-2xl border border-border/60 bg-card/60 px-3 py-2 text-xs text-muted-foreground">
+            <Users className="w-3.5 h-3.5" />
+            <span>{peerCount}</span>
+          </div>
+
+          <div className={cn(
+            "flex items-center gap-2 rounded-2xl border px-3 py-2 text-xs font-medium",
+            connectionBadge.className
+          )}>
+            <connectionBadge.icon
+              className={cn(
+                "w-3.5 h-3.5",
+                (connectionStatus === "connecting" || connectionStatus === "reconnecting") && "animate-spin"
+              )}
+            />
+            <span>{connectionBadge.label}</span>
+          </div>
+
+          <div className="flex items-center gap-2 ml-auto">
+            <Button size="sm" variant="secondary" className="gap-1.5 min-h-[46px] md:min-h-0" onClick={handleRequestResync}>
+              <RotateCcw className="w-3.5 h-3.5" />
+              <span>{t.sync.resyncNow}</span>
+            </Button>
+            <Button size="sm" variant="outline" className="gap-1.5 min-h-[46px] md:min-h-0" onClick={copyInviteLink}>
+              <Copy className="w-3.5 h-3.5" />
+              <span>{t.sync.copyInvite}</span>
+            </Button>
+            <Button size="sm" variant="ghost" className="gap-1.5 min-h-[46px] md:min-h-0 text-destructive" onClick={handleLeaveRoom}>
+              <ArrowLeft className="w-3.5 h-3.5" />
+              <span>{t.sync.leave}</span>
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {/* Video input bar */}
+      {canControlVideo ? (
+        <div className={cn("shrink-0", isMobile ? "flex items-center gap-2" : "flex items-center gap-2")}>
+          {!isMobile && (
+            <span className={cn(
+              "text-[10px] font-semibold uppercase tracking-wider px-2 py-1 rounded shrink-0 hidden sm:block",
+              guestControlEnabled
+                ? "bg-emerald-500/15 text-emerald-500 border border-emerald-500/25"
+                : "bg-primary/15 text-primary border border-primary/25"
+            )}>
+              {guestControlEnabled ? t.sync.freeControl : t.sync.hostMode}
+            </span>
           )}
+          <Input
+            placeholder={t.sync.pasteUrl}
+            value={videoInput}
+            onChange={(e) => setVideoInput(e.target.value)}
+            className={cn("flex-1 min-h-[44px] md:min-h-0", isMobile && "bg-background/75 border-primary/25")}
+            onKeyDown={(e) => e.key === "Enter" && handleLoadVideo()}
+          />
+          <Button
+            onClick={handleLoadVideo}
+            size={isMobile ? "icon" : "default"}
+            variant={isMobile ? "outline" : "default"}
+            className={cn("shrink-0", isMobile ? "h-11 w-11" : "gap-1.5 min-h-[46px] md:min-h-0")}
+          >
+            <Play className="w-4 h-4" />
+            {!isMobile && t.sync.loadVideo}
+          </Button>
+          <Button
+            onClick={() => setShowClips(true)}
+            variant="outline"
+            size={isMobile ? "icon" : "default"}
+            className={cn("shrink-0", isMobile ? "h-11 w-11" : "gap-1.5 min-h-[46px] md:min-h-0")}
+            aria-label={t.sync.openClips}
+          >
+            <Plus className="w-4 h-4" />
+            {!isMobile && t.sync.openClips}
+          </Button>
+        </div>
+      ) : (
+        <div className="flex items-center gap-2 px-3 py-2.5 rounded-md border border-border/40 bg-muted/30 text-muted-foreground text-sm select-none shrink-0">
+          <Radio className="w-4 h-4 opacity-50 shrink-0" />
+          <span>{t.sync.hostOnlyVideo}</span>
+        </div>
+      )}
+
+      {/* Sync notification */}
+      {lastEvent && (
+        <div className={cn(
+          "flex items-center gap-2 rounded-lg bg-primary/10 border border-primary/20 text-primary animate-in fade-in slide-in-from-top-2 duration-300 shrink-0",
+          isMobile ? "px-2 py-1.5 text-xs" : "px-3 py-2 text-sm"
+        )}>
+          <RefreshCw className="w-4 h-4 animate-spin" />
+          {lastEvent}
+        </div>
+      )}
 
       {/* Clips Overlay */}
       <ClipsOverlay
@@ -1202,8 +1027,12 @@ export default function SyncWatch() {
       />
 
       {/* Main content: always show sidebar */}
-      <div className="flex gap-3 flex-row items-stretch">
-        <div ref={playerAreaRef} className="min-w-0 flex-[3]">
+      <div className={cn(
+        "flex gap-3",
+        isMobile ? "flex-col flex-1 min-h-0 overflow-hidden gap-2" : "flex-row items-stretch"
+      )}>
+        {/* Video player area — sticky on mobile */}
+        <div ref={playerAreaRef} className={cn("min-w-0", isMobile ? "w-full shrink-0" : "flex-[3]")}>
           {currentVideoId ? (
             <div className="aspect-video rounded-lg overflow-hidden bg-black relative">
               {/*
@@ -1261,6 +1090,7 @@ export default function SyncWatch() {
           )}
         </div>
 
+        {/* Sidebar — always visible */}
         {sidebar}
       </div>
     </div>

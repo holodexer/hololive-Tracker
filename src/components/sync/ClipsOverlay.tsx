@@ -120,6 +120,28 @@ export function ClipsOverlay({
     return dedupeVideosById(videos).slice(0, CLIPS_PAGE_SIZE);
   }, []);
 
+  const getTabShortLabel = useCallback(
+    (tab: "live" | "archives" | "clips" | "playlists") => {
+      if (locale === "ja") {
+        if (tab === "live") return "配信";
+        if (tab === "archives") return "アーカ";
+        if (tab === "playlists") return "リスト";
+        return "切り抜き";
+      }
+      if (locale === "zh-TW") {
+        if (tab === "live") return "直播";
+        if (tab === "archives") return "存檔";
+        if (tab === "playlists") return "清單";
+        return "剪輯";
+      }
+      if (tab === "live") return "Live";
+      if (tab === "archives") return "Archive";
+      if (tab === "playlists") return "Lists";
+      return "Clips";
+    },
+    [locale]
+  );
+
   // Load live videos
   useEffect(() => {
     if (!open) return;
@@ -377,49 +399,65 @@ export function ClipsOverlay({
         </div>
 
         {/* Tabs */}
-        <div className="flex items-center justify-between gap-3 border-b border-border/30 bg-card/40 px-6 py-2 shrink-0">
-          <div className="flex gap-1">
-            {(["live", "archives", "clips", "playlists"] as const).map((tab) => (
+        <div className="border-b border-border/30 bg-card/40 px-3 py-2 md:px-6 shrink-0">
+          <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+            <div className="overflow-x-auto [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+              <div className="flex min-w-max gap-1 pr-2">
+                {(["live", "archives", "clips", "playlists"] as const).map((tab) => (
+                  <button
+                    key={tab}
+                    onClick={() => {
+                      setActiveTab(tab);
+                      onTabChange?.(tab);
+                      scrollTopRef.current = 0;
+                      if (tab !== "playlists") setSelectedPlaylistId(null);
+                    }}
+                    className={`shrink-0 min-w-[76px] md:min-w-0 flex items-center justify-center gap-1.5 px-3 md:px-4 py-2.5 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
+                      activeTab === tab
+                        ? "border-primary text-primary"
+                        : "border-transparent text-muted-foreground hover:text-foreground"
+                    }`}
+                    aria-label={tab === "live"
+                      ? (labels.liveNow || "直播中")
+                      : tab === "archives"
+                        ? labels.archivesTab
+                        : tab === "playlists"
+                          ? (labels.playlistsTab || "播放清單")
+                          : labels.clipsTab}
+                  >
+                    {tab === "live" ? <Radio className="w-4 h-4" />
+                      : tab === "archives" ? <Archive className="w-4 h-4" />
+                      : tab === "playlists" ? <ListMusic className="w-4 h-4" />
+                      : <Film className="w-4 h-4" />}
+                    <span className="md:hidden">{getTabShortLabel(tab)}</span>
+                    <span className="hidden md:inline">
+                      {tab === "live"
+                        ? (labels.liveNow || "直播中")
+                        : tab === "archives"
+                          ? labels.archivesTab
+                          : tab === "playlists"
+                            ? (labels.playlistsTab || "播放清單")
+                            : labels.clipsTab}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="flex justify-end md:justify-start">
               <button
-                key={tab}
-                onClick={() => {
-                  setActiveTab(tab);
-                  onTabChange?.(tab);
-                  scrollTopRef.current = 0;
-                  if (tab !== "playlists") setSelectedPlaylistId(null);
-                }}
-                className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${
-                  activeTab === tab
-                    ? "border-primary text-primary"
-                    : "border-transparent text-muted-foreground hover:text-foreground"
+                type="button"
+                onClick={() => setFavoritesOnly((v) => !v)}
+                className={`rounded-md px-3 py-1.5 text-xs font-medium border transition-colors whitespace-nowrap ${
+                  favoritesOnly
+                    ? "border-primary/50 bg-primary/15 text-primary"
+                    : "border-border/60 text-muted-foreground hover:text-foreground"
                 }`}
               >
-                {tab === "live" ? <Radio className="w-4 h-4" />
-                  : tab === "archives" ? <Archive className="w-4 h-4" />
-                  : tab === "playlists" ? <ListMusic className="w-4 h-4" />
-                  : <Film className="w-4 h-4" />}
-                {tab === "live"
-                  ? (labels.liveNow || "直播中")
-                  : tab === "archives"
-                    ? labels.archivesTab
-                    : tab === "playlists"
-                      ? (labels.playlistsTab || "播放清單")
-                      : labels.clipsTab}
+                {labels.favoriteOnly}
               </button>
-            ))}
+            </div>
           </div>
-
-          <button
-            type="button"
-            onClick={() => setFavoritesOnly((v) => !v)}
-            className={`rounded-md px-3 py-1.5 text-xs font-medium border transition-colors ${
-              favoritesOnly
-                ? "border-primary/50 bg-primary/15 text-primary"
-                : "border-border/60 text-muted-foreground hover:text-foreground"
-            }`}
-          >
-            {labels.favoriteOnly}
-          </button>
         </div>
 
         {/* Content */}
