@@ -133,7 +133,7 @@ export function StreamCard({ stream }: StreamCardProps) {
             {isUpcoming && (
               <button
                 onClick={handleReminderClick}
-                className={`p-1.5 rounded-full backdrop-blur-sm transition-colors opacity-0 group-hover:opacity-100 ${
+                className={`min-w-[44px] min-h-[44px] flex items-center justify-center rounded-full backdrop-blur-sm transition-colors opacity-0 group-hover:opacity-100 [@media(hover:none)]:opacity-100 ${
                   reminderEnabled
                     ? "bg-primary text-primary-foreground"
                     : "bg-background/60 text-muted-foreground hover:text-primary hover:bg-background/80"
@@ -146,7 +146,7 @@ export function StreamCard({ stream }: StreamCardProps) {
             {playlists.length > 0 && (
               <button
                 onClick={handlePlaylistClick}
-                className="p-1.5 rounded-full bg-background/60 backdrop-blur-sm text-muted-foreground hover:text-primary hover:bg-background/80 transition-colors opacity-0 group-hover:opacity-100"
+                className="min-w-[44px] min-h-[44px] flex items-center justify-center rounded-full bg-background/60 backdrop-blur-sm text-muted-foreground hover:text-primary hover:bg-background/80 transition-colors opacity-0 group-hover:opacity-100 [@media(hover:none)]:opacity-100"
                 title={t.playlists.addTo}
               >
                 <ListPlus className="w-4 h-4" />

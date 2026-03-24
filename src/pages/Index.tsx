@@ -14,6 +14,39 @@ import { TAB_PANEL_TRANSITION_CLASS } from "@/lib/transitions";
 
 const PAGE_SIZE = 48;
 
+function HomeLoadingState({ loadingLabel }: { loadingLabel: string }) {
+  return (
+    <div className="space-y-8" aria-live="polite" aria-busy="true">
+      <div className="flex items-center gap-2 border-b border-border pb-3">
+        <Loader2 className="w-4 h-4 animate-spin text-primary" />
+        <span className="text-sm text-muted-foreground">{loadingLabel}</span>
+      </div>
+
+      <section className="space-y-4">
+        <div className="h-6 w-44 rounded bg-muted/60 animate-pulse" />
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <div key={i} className="rounded-xl border border-border/60 bg-card/40 p-3 space-y-3">
+              <div className="h-40 w-full rounded-lg bg-muted/60 animate-pulse" />
+              <div className="h-4 w-11/12 rounded bg-muted/60 animate-pulse" />
+              <div className="h-3 w-2/3 rounded bg-muted/50 animate-pulse" />
+            </div>
+          ))}
+        </div>
+      </section>
+
+      <section className="space-y-4">
+        <div className="h-6 w-56 rounded bg-muted/60 animate-pulse" />
+        <div className="space-y-3">
+          {Array.from({ length: 3 }).map((_, i) => (
+            <div key={i} className="h-16 rounded-lg border border-border/50 bg-card/30 animate-pulse" />
+          ))}
+        </div>
+      </section>
+    </div>
+  );
+}
+
 const Index = () => {
   const { data, isLoading, error } = useHolodexStreams();
   const { t, clipLanguages, hidePrivateVideos, locale } = useSettings();
@@ -110,7 +143,7 @@ const Index = () => {
   }, [clipsPage, clipLangKey, hidePrivateVideos]);
 
   if (isLoading) {
-    return <LoadTransition loading={true}>null</LoadTransition>;
+    return <HomeLoadingState loadingLabel={t.common.loading} />;
   }
 
   if (error) {
