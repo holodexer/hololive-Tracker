@@ -3,6 +3,8 @@ import React, { createContext, useContext, useState, useCallback } from "react";
 interface MultiViewContextValue {
   selectedIds: string[];
   toggle: (videoId: string) => void;
+  setSelectedIds: (videoIds: string[]) => void;
+  reorder: (fromIndex: number, toIndex: number) => void;
   isSelected: (videoId: string) => boolean;
   clear: () => void;
 }
@@ -27,10 +29,34 @@ export function MultiViewProvider({ children }: { children: React.ReactNode }) {
     [selectedIds]
   );
 
+  const applySelectedIds = useCallback((videoIds: string[]) => {
+    const deduped = Array.from(new Set(videoIds.filter(Boolean))).slice(0, 4);
+    setSelectedIds(deduped);
+  }, []);
+
+  const reorder = useCallback((fromIndex: number, toIndex: number) => {
+    setSelectedIds((prev) => {
+      if (
+        fromIndex < 0 ||
+        toIndex < 0 ||
+        fromIndex >= prev.length ||
+        toIndex >= prev.length ||
+        fromIndex === toIndex
+      ) {
+        return prev;
+      }
+
+      const next = [...prev];
+      const [moved] = next.splice(fromIndex, 1);
+      next.splice(toIndex, 0, moved);
+      return next;
+    });
+  }, []);
+
   const clear = useCallback(() => setSelectedIds([]), []);
 
   return (
-    <MultiViewContext.Provider value={{ selectedIds, toggle, isSelected, clear }}>
+    <MultiViewContext.Provider value={{ selectedIds, toggle, setSelectedIds: applySelectedIds, reorder, isSelected, clear }}>
       {children}
     </MultiViewContext.Provider>
   );

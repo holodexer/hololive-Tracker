@@ -32,6 +32,10 @@ export function buildYouTubeEmbedUrl(videoId: string, autoplay = true, mute = fa
   const params = new URLSearchParams();
   if (autoplay) params.append("autoplay", "1");
   if (mute) params.append("mute", "1");
+  params.append("enablejsapi", "1");
+  if (typeof window !== "undefined" && window.location?.origin) {
+    params.append("origin", window.location.origin);
+  }
   return `https://www.youtube.com/embed/${videoId}?${params.toString()}`;
 }
 
