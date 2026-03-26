@@ -91,7 +91,7 @@ export default function SyncWatch() {
   const [countdown, setCountdown] = useState<{ videoId: string; title?: string } | null>(null);
   const [mobileSection, setMobileSection] = useState<"sidebar" | "collapsed">("sidebar");
   const [showClips, setShowClips] = useState(false);
-  const [clipsActiveTab, setClipsActiveTab] = useState<"live" | "archives" | "clips" | "playlists">("live");
+  const [clipsActiveTab, setClipsActiveTab] = useState<"live" | "archives" | "clips" | "playlists" | "jellyfin">("live");
 
   const playerRef = useRef<any>(null);
   const directVideoRef = useRef<HTMLVideoElement | null>(null);
@@ -105,6 +105,7 @@ export default function SyncWatch() {
   const playNextRef = useRef<() => void>(() => {});
   const lastGuestApplyAtRef = useRef(0);
   const guestAutoplayKickDoneForRef = useRef<string | null>(null);
+  const jellyfinTranscodeAttemptedRef = useRef<string | null>(null);
   const [needsGuestUnmute, setNeedsGuestUnmute] = useState(false);
   const [playerHeight, setPlayerHeight] = useState<number | null>(null);
   const currentMedia = useMemo(
@@ -337,6 +338,7 @@ export default function SyncWatch() {
   useEffect(() => {
     const el = directVideoRef.current;
     if (!el) return;
+    jellyfinTranscodeAttemptedRef.current = null; // reset retry on video change
     if (currentMedia?.source === "direct") {
       el.src = currentMedia.value;
       el.load();
@@ -597,7 +599,9 @@ export default function SyncWatch() {
 
   const handleSelectClip = useCallback((videoId: string, _title: string) => {
     if (!effectiveHost && !guestControlEnabled) return;
-    const serialized = serializeMedia({ source: "youtube", value: videoId });
+    const serialized = videoId.startsWith("http")
+      ? serializeMedia({ source: "direct", value: videoId })
+      : serializeMedia({ source: "youtube", value: videoId });
     setCurrentVideoId(serialized);
     videoChangeLockRef.current = true;
     setTimeout(() => { videoChangeLockRef.current = false; }, 3000);
@@ -607,6 +611,13 @@ export default function SyncWatch() {
     broadcastVideoChange(state);
     setShowClips(false);
   }, [broadcastVideoChange, effectiveHost, guestControlEnabled]);
+
+  const handleAddToQueue = useCallback((videoId: string, title?: string) => {
+    const serialized = videoId.startsWith("http")
+      ? serializeMedia({ source: "direct", value: videoId })
+      : serializeMedia({ source: "youtube", value: videoId });
+    addToQueue(serialized, title);
+  }, [addToQueue]);
 
   const handlePlayFromQueue = useCallback((itemId: string) => {
     if (!effectiveHost && !guestControlEnabled) return;
@@ -685,6 +696,25 @@ export default function SyncWatch() {
   const handleDirectVideoEnded = useCallback(() => {
     if (!effectiveHostRef.current) return;
     playNextRef.current();
+  }, []);
+
+  // Fallback: if a Jellyfin static stream fails (incompatible codec/container),
+  // retry once with server-side transcoding to H264/AAC MP4.
+  const handleDirectVideoError = useCallback(() => {
+    const el = directVideoRef.current;
+    if (!el) return;
+    const url = el.src;
+    if (!url || !url.includes("/Videos/") || !url.includes("static=true")) return;
+    if (jellyfinTranscodeAttemptedRef.current === url) return; // already retried
+    jellyfinTranscodeAttemptedRef.current = url;
+    const match = url.match(/^(https?:\/\/.+?)\/Videos\/([^/]+)\/stream/);
+    const apiKeyMatch = url.match(/[?&]api_key=([^&]+)/);
+    if (!match || !apiKeyMatch) return;
+    const [, base, itemId] = match;
+    const apiKey = apiKeyMatch[1];
+    el.src = `${base}/Videos/${itemId}/stream?api_key=${apiKey}&Container=mp4&VideoCodec=h264&AudioCodec=aac,mp3`;
+    el.load();
+    el.play().catch(() => {});
   }, []);
 
   const handleNicknameCancel = useCallback(() => {
@@ -1003,6 +1033,7 @@ export default function SyncWatch() {
         open={showClips}
         onClose={() => setShowClips(false)}
         onSelectClip={handleSelectClip}
+        onAddToQueue={handleAddToQueue}
         onTabChange={setClipsActiveTab}
         activeTab={clipsActiveTab}
         locale={locale}
@@ -1056,6 +1087,7 @@ export default function SyncWatch() {
                 onPause={handleDirectVideoSync}
                 onSeeked={handleDirectVideoSync}
                 onEnded={handleDirectVideoEnded}
+                onError={handleDirectVideoError}
               />
               {countdown && (
                 <QueueCountdown

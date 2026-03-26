@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from "react";
-import { X, Film, Radio, Archive, Loader2, Eye, Clock, ListMusic, ChevronLeft } from "lucide-react";
+import { X, Film, Radio, Archive, Loader2, Eye, Clock, ListMusic, ChevronLeft, ChevronRight, Server, Play, Plus } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   fetchHololiveClips,
@@ -19,8 +19,9 @@ interface ClipsOverlayProps {
   open: boolean;
   onClose: () => void;
   onSelectClip: (videoId: string, title: string) => void;
-  onTabChange?: (tab: "live" | "archives" | "clips" | "playlists") => void;
-  activeTab?: "live" | "archives" | "clips" | "playlists";
+  onAddToQueue?: (videoId: string, title?: string) => void;
+  onTabChange?: (tab: "live" | "archives" | "clips" | "playlists" | "jellyfin") => void;
+  activeTab?: "live" | "archives" | "clips" | "playlists" | "jellyfin";
   locale?: "en" | "zh-TW" | "ja";
   labels: {
     clipsTitle: string;
@@ -47,6 +48,21 @@ const INITIAL_PAGES = 1;
 const INITIAL_LOAD_COUNT = CLIPS_PAGE_SIZE * INITIAL_PAGES;
 const ARCHIVES_PAGE_SIZE = 48;
 
+interface JellyfinItem {
+  Id: string;
+  Name: string;
+  Type: string;
+  CollectionType?: string;
+  RunTimeTicks?: number;
+  SeriesName?: string;
+  ParentIndexNumber?: number;
+  IndexNumber?: number;
+  ChildCount?: number;
+  ImageTags?: { Primary?: string };
+  Overview?: string;
+  PrimaryImageAspectRatio?: number;
+}
+
 function dedupeVideosById(videos: HolodexVideo[]) {
   const map = new Map<string, HolodexVideo>();
   for (const video of videos) {
@@ -59,13 +75,14 @@ export function ClipsOverlay({
   open,
   onClose,
   onSelectClip,
+  onAddToQueue,
   onTabChange,
   activeTab: externalActiveTab = "live",
   locale = "en",
   labels,
 }: ClipsOverlayProps) {
-  const { hidePrivateVideos, clipLanguages, favorites, playlists, getVideoMeta } = useSettings();
-  const [activeTab, setActiveTab] = useState<"live" | "archives" | "clips" | "playlists">(externalActiveTab);
+  const { hidePrivateVideos, clipLanguages, favorites, playlists, getVideoMeta, jellyfinUrl, jellyfinToken } = useSettings();
+  const [activeTab, setActiveTab] = useState<"live" | "archives" | "clips" | "playlists" | "jellyfin">(externalActiveTab);
   const [favoritesOnly, setFavoritesOnly] = useState(false);
   const [selectedPlaylistId, setSelectedPlaylistId] = useState<string | null>(null);
 
@@ -90,6 +107,17 @@ export function ClipsOverlay({
   const [clipsLoading, setClipsLoading] = useState(false);
   const [clipsHasMore, setClipsHasMore] = useState(true);
   const [clipsPage, setClipsPage] = useState(0);
+
+  // Jellyfin tab state
+  const [jellyfinLibraries, setJellyfinLibraries] = useState<JellyfinItem[]>([]);
+  const [jellyfinLibsLoading, setJellyfinLibsLoading] = useState(false);
+  const [jellyfinNavStack, setJellyfinNavStack] = useState<{ id: string; name: string; type: string }[]>([]);
+  const [jellyfinContent, setJellyfinContent] = useState<JellyfinItem[]>([]);
+  const [jellyfinContentLoading, setJellyfinContentLoading] = useState(false);
+  const [jellyfinContentHasMore, setJellyfinContentHasMore] = useState(false);
+  const [jellyfinContentPage, setJellyfinContentPage] = useState(0);
+  const [jellyfinError, setJellyfinError] = useState<string | null>(null);
+
   const scrollAreaRef = useRef<HTMLDivElement>(null);
   const scrollTopRef = useRef(0);
   const loadedClipQueryKeyRef = useRef<string>("");
@@ -106,6 +134,10 @@ export function ClipsOverlay({
   const currentClipQueryKey = `${clipLangKey}|${hidePrivateVideos ? "1" : "0"}|${favoritesOnly ? "1" : "0"}|${favoritesKey}`;
   const currentArchiveQueryKey = `${hidePrivateVideos ? "1" : "0"}|${favoritesOnly ? "1" : "0"}|${favoritesKey}`;
   const favoriteIds = useMemo(() => favorites, [favorites]);
+  const jellyfinCurrentId = useMemo(
+    () => jellyfinNavStack.length > 0 ? jellyfinNavStack[jellyfinNavStack.length - 1].id : null,
+    [jellyfinNavStack]
+  );
 
   const applyFavoriteFilter = useCallback(
     (videos: HolodexVideo[]) => {
@@ -121,7 +153,8 @@ export function ClipsOverlay({
   }, []);
 
   const getTabShortLabel = useCallback(
-    (tab: "live" | "archives" | "clips" | "playlists") => {
+    (tab: "live" | "archives" | "clips" | "playlists" | "jellyfin") => {
+      if (tab === "jellyfin") return "Jellyfin";
       if (locale === "ja") {
         if (tab === "live") return "配信";
         if (tab === "archives") return "アーカ";
@@ -252,6 +285,72 @@ export function ClipsOverlay({
       });
   }, [open, activeTab, activeClipLangs, hidePrivateVideos, currentClipQueryKey, clips.length, applyFavoriteFilter, favoritesOnly, favoriteIds]);
 
+  // Load Jellyfin libraries
+  useEffect(() => {
+    if (!open || activeTab !== "jellyfin") return;
+    if (!jellyfinUrl || !jellyfinToken) return;
+    if (jellyfinLibraries.length > 0) return;
+    const base = jellyfinUrl.replace(/\/+$/, "");
+    setJellyfinLibsLoading(true);
+    setJellyfinError(null);
+    fetch(`${base}/Library/MediaFolders?api_key=${jellyfinToken}`)
+      .then((res) => {
+        if (!res.ok) throw new Error(`Jellyfin API error: ${res.status}`);
+        return res.json() as Promise<{ Items: JellyfinItem[] }>;
+      })
+      .then(({ Items }) => {
+        const HIDDEN_TYPES = new Set(["music", "playlists", "musicvideos"]);
+        const filtered = Items.filter(
+          (lib) =>
+            !HIDDEN_TYPES.has((lib.CollectionType ?? "").toLowerCase()) &&
+            !/recording/i.test(lib.Name)
+        );
+        setJellyfinLibraries(filtered);
+        setJellyfinLibsLoading(false);
+      })
+      .catch((err: unknown) => {
+        setJellyfinError(err instanceof Error ? err.message : "無法連接 Jellyfin 伺服器");
+        setJellyfinLibsLoading(false);
+      });
+  }, [open, activeTab, jellyfinUrl, jellyfinToken, jellyfinLibraries.length]);
+
+  // Load Jellyfin folder content when nav changes
+  useEffect(() => {
+    if (!open || activeTab !== "jellyfin") return;
+    if (!jellyfinUrl || !jellyfinToken || !jellyfinCurrentId) return;
+    const base = jellyfinUrl.replace(/\/+$/, "");
+    setJellyfinContentLoading(true);
+    setJellyfinContent([]);
+    setJellyfinContentPage(0);
+    setJellyfinContentHasMore(false);
+    setJellyfinError(null);
+    fetch(`${base}/Items?ParentId=${jellyfinCurrentId}&api_key=${jellyfinToken}&SortBy=SortName,ProductionYear&SortOrder=Ascending&Limit=48&StartIndex=0&Fields=BasicSyncInfo,PrimaryImageAspectRatio,Overview`)
+      .then((res) => {
+        if (!res.ok) throw new Error(`Jellyfin API error: ${res.status}`);
+        return res.json() as Promise<{ Items: JellyfinItem[]; TotalRecordCount: number }>;
+      })
+      .then(({ Items, TotalRecordCount }) => {
+        setJellyfinContent(Items);
+        setJellyfinContentPage(1);
+        setJellyfinContentHasMore(TotalRecordCount > 48);
+        setJellyfinContentLoading(false);
+      })
+      .catch((err: unknown) => {
+        setJellyfinError(err instanceof Error ? err.message : "無法連接 Jellyfin 伺服器");
+        setJellyfinContentLoading(false);
+      });
+  }, [open, activeTab, jellyfinUrl, jellyfinToken, jellyfinCurrentId]);
+
+  // Reset Jellyfin state when URL/token changes
+  useEffect(() => {
+    setJellyfinLibraries([]);
+    setJellyfinNavStack([]);
+    setJellyfinContent([]);
+    setJellyfinContentPage(0);
+    setJellyfinContentHasMore(false);
+    setJellyfinError(null);
+  }, [jellyfinUrl, jellyfinToken]);
+
   // Keep and restore scroll position in the overlay list viewport
   useEffect(() => {
     if (!open) return;
@@ -357,6 +456,45 @@ export function ClipsOverlay({
     }
   };
 
+  const handleLoadMoreJellyfinContent = async () => {
+    if (!jellyfinUrl || !jellyfinToken || !jellyfinCurrentId) return;
+    const base = jellyfinUrl.replace(/\/+$/, "");
+    setJellyfinContentLoading(true);
+    try {
+      const res = await fetch(`${base}/Items?ParentId=${jellyfinCurrentId}&api_key=${jellyfinToken}&SortBy=SortName,ProductionYear&SortOrder=Ascending&Limit=48&StartIndex=${jellyfinContentPage * 48}&Fields=BasicSyncInfo,PrimaryImageAspectRatio,Overview`);
+      if (!res.ok) throw new Error(`Jellyfin API error: ${res.status}`);
+      const { Items, TotalRecordCount } = await res.json() as { Items: JellyfinItem[]; TotalRecordCount: number };
+      setJellyfinContent((prev) => [...prev, ...Items]);
+      const nextPage = jellyfinContentPage + 1;
+      setJellyfinContentPage(nextPage);
+      setJellyfinContentHasMore(nextPage * 48 < TotalRecordCount);
+    } finally {
+      setJellyfinContentLoading(false);
+    }
+  };
+
+  const handleJellyfinNavTo = (item: JellyfinItem) => {
+    const playableTypes = ["Movie", "Episode", "Video", "Audio", "MusicVideo"];
+    if (playableTypes.includes(item.Type)) {
+      const base = jellyfinUrl.replace(/\/+$/, "");
+      const streamUrl = `${base}/Videos/${item.Id}/stream?static=true&api_key=${jellyfinToken}`;
+      onSelectClip(streamUrl, item.Name);
+      return;
+    }
+    setJellyfinNavStack((prev) => [...prev, { id: item.Id, name: item.Name, type: item.Type }]);
+  };
+
+  const handleJellyfinQueueItem = (item: JellyfinItem) => {
+    if (!onAddToQueue || !jellyfinUrl || !jellyfinToken) return;
+    const base = jellyfinUrl.replace(/\/+$/, "");
+    onAddToQueue(`${base}/Videos/${item.Id}/stream?static=true&api_key=${jellyfinToken}`, item.Name);
+  };
+
+  const handleJellyfinSelectLib = (lib: JellyfinItem) => {
+    if (jellyfinNavStack[0]?.id === lib.Id) return;
+    setJellyfinNavStack([{ id: lib.Id, name: lib.Name, type: lib.Type }]);
+  };
+
   if (!open) return null;
 
   return (
@@ -377,6 +515,8 @@ export function ClipsOverlay({
               <Archive className="w-5 h-5 text-primary" />
             ) : activeTab === "playlists" ? (
               <ListMusic className="w-5 h-5 text-primary" />
+            ) : activeTab === "jellyfin" ? (
+              <Server className="w-5 h-5 text-primary" />
             ) : (
               <Film className="w-5 h-5 text-primary" />
             )}
@@ -387,7 +527,9 @@ export function ClipsOverlay({
                   ? labels.archivesTab
                   : activeTab === "playlists"
                     ? (labels.playlistsTab || "播放清單")
-                    : labels.clipsTitle}
+                    : activeTab === "jellyfin"
+                      ? "Jellyfin"
+                      : labels.clipsTitle}
             </h2>
           </div>
           <button
@@ -403,7 +545,7 @@ export function ClipsOverlay({
           <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
             <div className="overflow-x-auto [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
               <div className="flex min-w-max gap-1 pr-2">
-                {(["live", "archives", "clips", "playlists"] as const).map((tab) => (
+                {(["live", "archives", "clips", "playlists", "jellyfin"] as const).map((tab) => (
                   <button
                     key={tab}
                     onClick={() => {
@@ -423,11 +565,14 @@ export function ClipsOverlay({
                         ? labels.archivesTab
                         : tab === "playlists"
                           ? (labels.playlistsTab || "播放清單")
-                          : labels.clipsTab}
+                          : tab === "jellyfin"
+                            ? "Jellyfin"
+                            : labels.clipsTab}
                   >
                     {tab === "live" ? <Radio className="w-4 h-4" />
                       : tab === "archives" ? <Archive className="w-4 h-4" />
                       : tab === "playlists" ? <ListMusic className="w-4 h-4" />
+                      : tab === "jellyfin" ? <Server className="w-4 h-4" />
                       : <Film className="w-4 h-4" />}
                     <span className="md:hidden">{getTabShortLabel(tab)}</span>
                     <span className="hidden md:inline">
@@ -437,7 +582,9 @@ export function ClipsOverlay({
                           ? labels.archivesTab
                           : tab === "playlists"
                             ? (labels.playlistsTab || "播放清單")
-                            : labels.clipsTab}
+                            : tab === "jellyfin"
+                              ? "Jellyfin"
+                              : labels.clipsTab}
                     </span>
                   </button>
                 ))}
@@ -642,6 +789,317 @@ export function ClipsOverlay({
                   })}
                 </div>
               )
+            ) : activeTab === "jellyfin" ? (
+              // Jellyfin section
+              !jellyfinUrl || !jellyfinToken ? (
+                <div className="flex flex-col items-center justify-center py-16 gap-3 text-muted-foreground">
+                  <Server className="w-10 h-10 opacity-40" />
+                  <p className="text-sm text-center">請在設定中配置 Jellyfin 伺服器 URL 及 API Token</p>
+                </div>
+              ) : (
+                <div className="flex gap-4 min-h-[300px]">
+                  {/* Left nav — desktop vertical list */}
+                  <div className="hidden md:flex flex-col gap-0.5 w-44 shrink-0">
+                    {jellyfinLibsLoading ? (
+                      <div className="flex justify-center pt-6"><Loader2 className="w-5 h-5 animate-spin text-primary" /></div>
+                    ) : jellyfinLibraries.length === 0 && jellyfinError ? (
+                      <p className="text-xs text-muted-foreground px-2 py-2">{jellyfinError}</p>
+                    ) : (
+                      jellyfinLibraries.map((lib) => {
+                        const isSelected = jellyfinNavStack[0]?.id === lib.Id;
+                        return (
+                          <button
+                            key={lib.Id}
+                            type="button"
+                            onClick={() => handleJellyfinSelectLib(lib)}
+                            className={`flex items-center gap-2 px-3 py-2 rounded-md text-sm text-left transition-colors w-full ${
+                              isSelected
+                                ? "bg-primary/15 text-primary font-medium"
+                                : "text-muted-foreground hover:text-foreground hover:bg-muted"
+                            }`}
+                          >
+                            <Server className="w-3.5 h-3.5 shrink-0" />
+                            <span className="truncate">{lib.Name}</span>
+                          </button>
+                        );
+                      })
+                    )}
+                  </div>
+
+                  {/* Right content area */}
+                  <div className="flex-1 min-w-0 space-y-3">
+                    {/* Mobile: horizontal library pills */}
+                    <div className="flex md:hidden flex-wrap gap-2 pb-1">
+                      {jellyfinLibsLoading ? (
+                        <Loader2 className="w-4 h-4 animate-spin text-primary" />
+                      ) : (
+                        jellyfinLibraries.map((lib) => {
+                          const isSelected = jellyfinNavStack[0]?.id === lib.Id;
+                          return (
+                            <button
+                              key={lib.Id}
+                              type="button"
+                              onClick={() => handleJellyfinSelectLib(lib)}
+                              className={`shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border transition-colors ${
+                                isSelected
+                                  ? "border-primary/50 bg-primary/15 text-primary"
+                                  : "border-border/60 text-muted-foreground hover:text-foreground"
+                              }`}
+                            >
+                              <Server className="w-3 h-3" />
+                              {lib.Name}
+                            </button>
+                          );
+                        })
+                      )}
+                    </div>
+
+                    {/* Breadcrumb */}
+                    {jellyfinNavStack.length > 0 && (
+                      <nav className="flex items-center gap-0.5 text-xs text-muted-foreground flex-wrap">
+                        {jellyfinNavStack.map((entry, i) => (
+                          <span key={entry.id} className="flex items-center gap-0.5">
+                            {i > 0 && <ChevronRight className="w-3 h-3 opacity-50 shrink-0" />}
+                            <button
+                              type="button"
+                              onClick={() => setJellyfinNavStack((prev) => prev.slice(0, i + 1))}
+                              className={`hover:text-foreground transition-colors ${
+                                i === jellyfinNavStack.length - 1 ? "text-foreground font-medium" : ""
+                              }`}
+                            >
+                              {entry.name}
+                            </button>
+                          </span>
+                        ))}
+                      </nav>
+                    )}
+
+                    {/* No library selected */}
+                    {!jellyfinCurrentId && !jellyfinLibsLoading && !jellyfinError && (
+                      <div className="flex flex-col items-center justify-center py-16 gap-3 text-muted-foreground">
+                        <Server className="w-10 h-10 opacity-30" />
+                        <p className="text-sm">請選擇左側媒體庫</p>
+                      </div>
+                    )}
+
+                    {/* Error */}
+                    {jellyfinError && jellyfinContent.length === 0 && (
+                      <div className="flex justify-center py-8">
+                        <p className="text-sm text-muted-foreground">{jellyfinError}</p>
+                      </div>
+                    )}
+
+                    {/* Content loading */}
+                    {jellyfinContentLoading && jellyfinContent.length === 0 && (
+                      <div className="flex justify-center py-8">
+                        <Loader2 className="w-6 h-6 animate-spin text-primary" />
+                      </div>
+                    )}
+
+                    {/* Content grid / episode list */}
+                    {jellyfinContent.length > 0 && (() => {
+                      const base = jellyfinUrl.replace(/\/+$/, "");
+                      const isEpisodeList = jellyfinContent.every((i) => i.Type === "Episode");
+
+                      const calcDuration = (ticks?: number) => {
+                        if (!ticks) return null;
+                        const total = Math.floor(ticks / 10_000_000);
+                        const h = Math.floor(total / 3600);
+                        const m = Math.floor((total % 3600) / 60);
+                        const s = total % 60;
+                        return h > 0
+                          ? `${h}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`
+                          : `${m}:${String(s).padStart(2, "0")}`;
+                      };
+
+                      if (isEpisodeList) {
+                        return (
+                          <div className="space-y-2">
+                            {/* Episode list header */}
+                            <div className="flex items-center pb-1">
+                              <span className="text-xs text-muted-foreground">{jellyfinContent.length} 集</span>
+                            </div>
+
+                            {/* Vertical episode cards */}
+                            {jellyfinContent.map((item) => {
+                              const thumbUrl = item.ImageTags?.Primary
+                                ? `${base}/Items/${item.Id}/Images/Primary?api_key=${jellyfinToken}&maxWidth=300`
+                                : null;
+                              const duration = calcDuration(item.RunTimeTicks);
+                              const epLabel = [
+                                item.ParentIndexNumber != null ? `S${item.ParentIndexNumber}` : null,
+                                item.IndexNumber != null ? `E${item.IndexNumber}` : null,
+                              ].filter(Boolean).join("");
+                              const epPrefix = item.IndexNumber != null ? `第 ${item.IndexNumber} 集` : null;
+                              const displayTitle = epPrefix ? `${epPrefix}　${item.Name}` : item.Name;
+                              return (
+                                <div
+                                  key={item.Id}
+                                  className="flex gap-3 rounded-md border border-border bg-card hover:border-primary/40 transition-colors p-2"
+                                >
+                                  {/* Thumbnail */}
+                                  <div className="relative shrink-0 w-36 md:w-44 aspect-video rounded overflow-hidden bg-muted">
+                                    {thumbUrl ? (
+                                      <img src={thumbUrl} alt={item.Name} className="w-full h-full object-cover" loading="lazy" />
+                                    ) : (
+                                      <div className="w-full h-full flex items-center justify-center">
+                                        <Film className="w-6 h-6 text-muted-foreground opacity-50" />
+                                      </div>
+                                    )}
+                                    {epLabel && (
+                                      <span className="absolute bottom-1 left-1 bg-black/75 text-white text-[9px] px-1 py-0.5 rounded font-mono">
+                                        {epLabel}
+                                      </span>
+                                    )}
+                                    {duration && (
+                                      <span className="absolute bottom-1 right-1 bg-black/75 text-white text-[9px] px-1 py-0.5 rounded">
+                                        {duration}
+                                      </span>
+                                    )}
+                                  </div>
+
+                                  {/* Info + actions */}
+                                  <div className="flex-1 min-w-0 flex flex-col justify-between py-0.5">
+                                    <div>
+                                      <p className="text-sm font-medium text-foreground line-clamp-2 leading-snug">{displayTitle}</p>
+                                      {item.Overview ? (
+                                        <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2 leading-relaxed">{item.Overview}</p>
+                                      ) : item.SeriesName ? (
+                                        <p className="text-xs text-muted-foreground mt-0.5 truncate">{item.SeriesName}</p>
+                                      ) : null}
+                                    </div>
+                                    <div className="flex items-center gap-2 mt-2">
+                                      <button
+                                        type="button"
+                                        onClick={() => handleJellyfinNavTo(item)}
+                                        className="flex items-center gap-1 px-2.5 py-1.5 rounded-md bg-primary text-primary-foreground text-xs font-medium hover:bg-primary/90 transition-colors"
+                                      >
+                                        <Play className="w-3 h-3" />
+                                        播放
+                                      </button>
+                                      {onAddToQueue && (
+                                        <button
+                                          type="button"
+                                          onClick={() => handleJellyfinQueueItem(item)}
+                                          className="flex items-center gap-1 px-2.5 py-1.5 rounded-md border border-border/70 text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+                                        >
+                                          <Plus className="w-3 h-3" />
+                                          待播
+                                        </button>
+                                      )}
+                                    </div>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        );
+                      }
+
+                      // Non-episode grid (libraries / series / seasons / movies)
+                      // Detect if items have portrait covers (ratio < 1 = anime/movie posters)
+                      const hasPortraitItems = jellyfinContent.some(
+                        (i) => i.PrimaryImageAspectRatio !== undefined && i.PrimaryImageAspectRatio < 1
+                      );
+                      return (
+                        <div className={hasPortraitItems
+                          ? "grid grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3"
+                          : "grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3"
+                        }>
+                          {jellyfinContent.map((item) => {
+                            const isPlayable = ["Movie", "Episode", "Video", "Audio", "MusicVideo"].includes(item.Type);
+                            const isPortrait = item.PrimaryImageAspectRatio !== undefined && item.PrimaryImageAspectRatio < 1;
+                            const thumbUrl = item.ImageTags?.Primary
+                              ? `${base}/Items/${item.Id}/Images/Primary?api_key=${jellyfinToken}&maxWidth=300`
+                              : null;
+                            const duration = isPlayable ? calcDuration(item.RunTimeTicks) : null;
+                            const subtitle = item.Type === "Episode" && item.SeriesName
+                              ? `${item.SeriesName}${item.ParentIndexNumber != null ? ` S${item.ParentIndexNumber}` : ""}${item.IndexNumber != null ? `E${item.IndexNumber}` : ""}`
+                              : item.ChildCount != null
+                                ? `${item.ChildCount} 項目`
+                                : item.Type;
+                            return (
+                              <div key={item.Id} className="relative group">
+                                <button
+                                  type="button"
+                                  onClick={() => handleJellyfinNavTo(item)}
+                                  className="block w-full rounded-lg overflow-hidden bg-card border border-border hover:border-primary/50 transition-colors text-left"
+                                >
+                                  {isPortrait ? (
+                                    <div className="relative aspect-[2/3] bg-muted">
+                                        {thumbUrl ? (
+                                          <img src={thumbUrl} alt={item.Name} className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-[1.03]" loading="lazy" />
+                                        ) : (
+                                          <div className="w-full h-full flex items-center justify-center">
+                                            <Film className="w-8 h-8 text-muted-foreground opacity-50" />
+                                          </div>
+                                        )}
+                                        <div className="absolute inset-0 bg-gradient-to-t from-background via-background/35 to-transparent" />
+                                        {item.ChildCount != null && item.ChildCount > 0 && (
+                                          <div className="absolute top-2 left-2 bg-black/75 text-white text-[10px] font-semibold rounded px-1.5 py-0.5 leading-tight">
+                                            {item.ChildCount}
+                                          </div>
+                                        )}
+                                        {!isPlayable && (
+                                          <div className="absolute top-2 right-2 rounded-full bg-black/45 p-1 text-white/80 backdrop-blur-sm">
+                                            <ChevronRight className="w-3.5 h-3.5" />
+                                          </div>
+                                        )}
+                                        <div className="absolute bottom-0 left-0 right-0 p-3">
+                                          <p className="text-sm font-semibold text-foreground line-clamp-2 leading-snug group-hover:text-primary transition-colors">
+                                            {item.Name}
+                                          </p>
+                                          <div className="mt-1 flex items-center justify-between gap-2">
+                                            <span className="text-xs text-muted-foreground line-clamp-1">{subtitle}</span>
+                                            {duration && <span className="text-[10px] text-muted-foreground shrink-0">{duration}</span>}
+                                          </div>
+                                        </div>
+                                      </div>
+                                  ) : (
+                                    <div className="relative aspect-video bg-muted">
+                                      {thumbUrl ? (
+                                        <img src={thumbUrl} alt={item.Name} className="w-full h-full object-cover" loading="lazy" />
+                                      ) : (
+                                        <div className="w-full h-full flex items-center justify-center">
+                                          {isPlayable
+                                            ? <Film className="w-8 h-8 text-muted-foreground opacity-50" />
+                                            : <Server className="w-8 h-8 text-muted-foreground opacity-50" />}
+                                        </div>
+                                      )}
+                                      <div className="absolute inset-0 bg-gradient-to-t from-background/90 via-background/10 to-transparent" />
+                                      {!isPlayable && (
+                                        <div className="absolute top-2 right-2">
+                                          <ChevronRight className="w-4 h-4 text-white/70" />
+                                        </div>
+                                      )}
+                                      <div className="absolute bottom-0 left-0 right-0 p-2">
+                                        <p className="text-xs font-semibold text-foreground line-clamp-2 group-hover:text-primary transition-colors">
+                                          {item.Name}
+                                        </p>
+                                        <div className="flex items-center justify-between mt-0.5">
+                                          <span className="text-[10px] text-muted-foreground truncate pr-1">{subtitle}</span>
+                                          {duration && <span className="text-[10px] text-muted-foreground shrink-0">{duration}</span>}
+                                        </div>
+                                      </div>
+                                    </div>
+                                  )}
+                                </button>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      );
+                    })()}
+
+                    {/* Empty content */}
+                    {!jellyfinContentLoading && jellyfinCurrentId && jellyfinContent.length === 0 && !jellyfinError && (
+                      <div className="flex justify-center py-8">
+                        <p className="text-sm text-muted-foreground">{labels.noClipsFound}</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )
             ) : (
               // Playlists section
               selectedPlaylistId === null ? (
@@ -731,6 +1189,25 @@ export function ClipsOverlay({
             )}
 
             {/* Load more button */}
+            {activeTab === "jellyfin" && jellyfinContentHasMore && jellyfinContent.length > 0 && (
+              <div className="flex justify-center py-4">
+                <button
+                  onClick={handleLoadMoreJellyfinContent}
+                  disabled={jellyfinContentLoading}
+                  className="px-6 py-2 rounded-md bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                >
+                  {jellyfinContentLoading ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      {labels.loading}
+                    </>
+                  ) : (
+                    labels.loadMore
+                  )}
+                </button>
+              </div>
+            )}
+
             {activeTab === "clips" && clipsHasMore && clips.length > 0 && (
               <div className="flex justify-center py-4">
                 <button
@@ -779,7 +1256,9 @@ export function ClipsOverlay({
               ? (labels.selectArchiveToAdd || labels.selectClipToAdd)
               : activeTab === "playlists"
                 ? labels.selectClipToAdd
-                : (labels.selectLiveToAdd || labels.selectClipToAdd)}
+                : activeTab === "jellyfin"
+                  ? labels.selectClipToAdd
+                  : (labels.selectLiveToAdd || labels.selectClipToAdd)}
         </div>
       </div>
     </div>

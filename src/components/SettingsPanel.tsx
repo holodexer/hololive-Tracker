@@ -1,5 +1,5 @@
 import { useSettings } from "@/contexts/SettingsContext";
-import { Settings, Globe, Moon, Sun, Monitor, Filter, Languages, Download, Upload, User, ImagePlus, Trash2 } from "lucide-react";
+import { Settings, Globe, Moon, Sun, Monitor, Filter, Languages, Download, Upload, User, ImagePlus, Trash2, Server } from "lucide-react";
 import { useState, useRef, useEffect } from "react";
 import { createPortal } from "react-dom";
 import type { Locale } from "@/lib/i18n";
@@ -32,7 +32,9 @@ export function SettingsPanel({ collapsed = false, externalOpen, onExternalOpenC
   const avatarInputRef = useRef<HTMLInputElement>(null);
   const {
     locale, theme, username, avatar, directYoutube, hideInactive, hidePrivateVideos, clipLanguages,
+    jellyfinUrl, jellyfinToken,
     setLocale, setTheme, setUsername, setAvatar, setDirectYoutube, setHideInactive, setHidePrivateVideos, toggleClipLanguage,
+    setJellyfinUrl, setJellyfinToken,
     exportConfig, importConfig, t,
   } = useSettings();
 
@@ -266,6 +268,28 @@ export function SettingsPanel({ collapsed = false, externalOpen, onExternalOpenC
                       <p className="text-xs text-muted-foreground">{t.settings.directYoutubeDesc}</p>
                     </div>
                     <Switch checked={directYoutube} onCheckedChange={setDirectYoutube} />
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+                    <Server className="w-4 h-4" />
+                    Jellyfin
+                  </label>
+                  <div className="space-y-2">
+                    <Input
+                      value={jellyfinUrl}
+                      onChange={(e) => setJellyfinUrl(e.target.value)}
+                      placeholder="http://your-jellyfin-server:8096"
+                      className="text-sm"
+                    />
+                    <Input
+                      value={jellyfinToken}
+                      onChange={(e) => setJellyfinToken(e.target.value)}
+                      placeholder="API Token"
+                      type="password"
+                      className="text-sm"
+                    />
                   </div>
                 </div>
               </div>

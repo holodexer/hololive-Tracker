@@ -41,7 +41,7 @@ export default function MultiView() {
   const [mutedById, setMutedById] = useState<Record<string, boolean>>({});
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [showClips, setShowClips] = useState(false);
-  const [clipsActiveTab, setClipsActiveTab] = useState<"live" | "archives" | "clips" | "playlists">("live");
+  const [clipsActiveTab, setClipsActiveTab] = useState<"live" | "archives" | "clips" | "playlists" | "jellyfin">("live");
   const [pendingWindowIndex, setPendingWindowIndex] = useState<number | null>(null);
   const iframeRefs = useRef<Map<string, HTMLIFrameElement>>(new Map());
 

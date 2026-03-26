@@ -43,6 +43,8 @@ interface SettingsState {
   videoMeta: Record<string, VideoMeta>;
   recentVideos: RecentVideoMeta[];
   reminders: StreamReminder[];
+  jellyfinUrl: string;
+  jellyfinToken: string;
 }
 
 interface SettingsContextValue extends SettingsState {
@@ -56,6 +58,8 @@ interface SettingsContextValue extends SettingsState {
   setHideInactive: (v: boolean) => void;
   setHidePrivateVideos: (v: boolean) => void;
   toggleClipLanguage: (lang: string) => void;
+  setJellyfinUrl: (v: string) => void;
+  setJellyfinToken: (v: string) => void;
   createPlaylist: (name: string) => void;
   deletePlaylist: (id: string) => void;
   renamePlaylist: (id: string, name: string) => void;
@@ -87,6 +91,8 @@ const defaultSettings: SettingsState = {
   videoMeta: {},
   recentVideos: [],
   reminders: [],
+  jellyfinUrl: "",
+  jellyfinToken: "",
 };
 
 function loadSettings(): SettingsState {
@@ -133,6 +139,8 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
   const isFavorite = useCallback((channelId: string) => state.favorites.includes(channelId), [state.favorites]);
   const setHideInactive = useCallback((hideInactive: boolean) => setState((s) => ({ ...s, hideInactive })), []);
   const setHidePrivateVideos = useCallback((hidePrivateVideos: boolean) => setState((s) => ({ ...s, hidePrivateVideos })), []);
+  const setJellyfinUrl = useCallback((jellyfinUrl: string) => setState((s) => ({ ...s, jellyfinUrl })), []);
+  const setJellyfinToken = useCallback((jellyfinToken: string) => setState((s) => ({ ...s, jellyfinToken })), []);
   const toggleClipLanguage = useCallback(
     (lang: string) =>
       setState((s) => ({
@@ -253,6 +261,8 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
     setHideInactive,
     setHidePrivateVideos,
     toggleClipLanguage,
+    setJellyfinUrl,
+    setJellyfinToken,
     createPlaylist,
     deletePlaylist,
     renamePlaylist,
