@@ -92,6 +92,7 @@ export default function SyncWatch() {
   const [mobileSection, setMobileSection] = useState<"sidebar" | "collapsed">("sidebar");
   const [showClips, setShowClips] = useState(false);
   const [clipsActiveTab, setClipsActiveTab] = useState<"live" | "archives" | "clips" | "playlists" | "jellyfin">("live");
+  const [directPausedFrame, setDirectPausedFrame] = useState<string | null>(null);
 
   const playerRef = useRef<any>(null);
   const directVideoRef = useRef<HTMLVideoElement | null>(null);
@@ -339,6 +340,7 @@ export default function SyncWatch() {
     const el = directVideoRef.current;
     if (!el) return;
     jellyfinTranscodeAttemptedRef.current = null; // reset retry on video change
+    setDirectPausedFrame(null);
     if (currentMedia?.source === "direct") {
       el.src = currentMedia.value;
       el.load();
@@ -688,6 +690,40 @@ export default function SyncWatch() {
     };
     broadcastSync(state);
   }, [broadcastSync]);
+
+  const captureDirectPausedFrame = useCallback(() => {
+    const el = directVideoRef.current;
+    if (!el || el.readyState < 2 || el.videoWidth === 0 || el.videoHeight === 0) {
+      setDirectPausedFrame(null);
+      return;
+    }
+
+    try {
+      const canvas = document.createElement("canvas");
+      canvas.width = el.videoWidth;
+      canvas.height = el.videoHeight;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) {
+        setDirectPausedFrame(null);
+        return;
+      }
+      ctx.drawImage(el, 0, 0, canvas.width, canvas.height);
+      setDirectPausedFrame(canvas.toDataURL("image/jpeg", 0.82));
+    } catch {
+      // Cross-origin videos may block canvas export; keep default fallback behavior.
+      setDirectPausedFrame(null);
+    }
+  }, []);
+
+  const handleDirectVideoPause = useCallback(() => {
+    captureDirectPausedFrame();
+    handleDirectVideoSync();
+  }, [captureDirectPausedFrame, handleDirectVideoSync]);
+
+  const handleDirectVideoPlay = useCallback(() => {
+    setDirectPausedFrame(null);
+    handleDirectVideoSync();
+  }, [handleDirectVideoSync]);
 
   const handleDirectVideoReady = useCallback(() => {
     notifyPlayerReady();
@@ -1083,12 +1119,19 @@ export default function SyncWatch() {
                 className="w-full h-full"
                 style={{ display: currentMedia?.source === "direct" ? "block" : "none" }}
                 onLoadedMetadata={handleDirectVideoReady}
-                onPlay={handleDirectVideoSync}
-                onPause={handleDirectVideoSync}
+                onPlay={handleDirectVideoPlay}
+                onPause={handleDirectVideoPause}
                 onSeeked={handleDirectVideoSync}
                 onEnded={handleDirectVideoEnded}
                 onError={handleDirectVideoError}
               />
+              {currentMedia?.source === "direct" && directPausedFrame && directVideoRef.current?.paused && (
+                <img
+                  src={directPausedFrame}
+                  alt="Paused frame"
+                  className="pointer-events-none absolute inset-0 h-full w-full object-cover"
+                />
+              )}
               {countdown && (
                 <QueueCountdown
                   nextTitle={countdown.title}

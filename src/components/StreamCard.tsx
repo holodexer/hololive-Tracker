@@ -16,7 +16,7 @@ export function StreamCard({ stream }: StreamCardProps) {
   const { directYoutube, locale, playlists, addToPlaylist, recordRecentVideo, toggleReminder, hasReminder, t } = useSettings();
   const isLive = stream.status === "live";
   const isUpcoming = stream.status === "upcoming";
-  const thumbnail = buildYouTubeThumbnailUrl(stream.id);
+  const thumbnail = buildYouTubeThumbnailUrl(stream.id, "hq720");
   const channelName = getDisplayName(stream.channel, locale);
   const reminderEnabled = hasReminder(stream.id);
 

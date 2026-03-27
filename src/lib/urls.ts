@@ -6,10 +6,14 @@
 /**
  * Build YouTube video thumbnail URL
  * @param videoId YouTube video ID
- * @returns Thumbnail URL (mqdefault quality)
+ * @param quality Thumbnail quality preset
+ * @returns Thumbnail URL
  */
-export function buildYouTubeThumbnailUrl(videoId: string): string {
-  return `https://i.ytimg.com/vi/${videoId}/mqdefault.jpg`;
+export function buildYouTubeThumbnailUrl(
+  videoId: string,
+  quality: "mqdefault" | "hqdefault" | "hq720" | "sddefault" | "maxresdefault" = "mqdefault"
+): string {
+  return `https://i.ytimg.com/vi/${videoId}/${quality}.jpg`;
 }
 
 /**

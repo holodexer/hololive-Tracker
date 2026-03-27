@@ -200,7 +200,7 @@ export function GlobalSearch() {
               {recentResults.map((video) => (
                 <CommandItem key={`recent-${video.id}`} value={`recent-${video.id}-${video.title}`} onSelect={() => openVideo(video)}>
                   <img
-                    src={video.thumbnail ?? buildYouTubeThumbnailUrl(video.id)}
+                    src={video.thumbnail ?? buildYouTubeThumbnailUrl(video.id, "hq720")}
                     alt={video.title}
                     className="mr-3 h-10 w-16 rounded object-cover"
                   />
@@ -232,13 +232,13 @@ export function GlobalSearch() {
                         id: video.id,
                         title: video.title,
                         channelName,
-                        thumbnail: buildYouTubeThumbnailUrl(video.id),
+                        thumbnail: buildYouTubeThumbnailUrl(video.id, "hq720"),
                         status: video.status,
                       })
                     }
                   >
                     <img
-                      src={buildYouTubeThumbnailUrl(video.id)}
+                      src={buildYouTubeThumbnailUrl(video.id, "hq720")}
                       alt={video.title}
                       className="mr-3 h-10 w-16 rounded object-cover"
                     />

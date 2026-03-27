@@ -89,7 +89,7 @@ export default function Playlist() {
         meta,
         title: meta?.title ?? videoId,
         channelName: meta?.channelName ?? "",
-        thumbnail: buildYouTubeThumbnailUrl(videoId),
+        thumbnail: buildYouTubeThumbnailUrl(videoId, "hq720"),
       };
     });
   }, [playlist.videoIds, getVideoMeta, fetchedMeta]);
@@ -132,7 +132,7 @@ export default function Playlist() {
       id: videoId,
       title: meta?.title ?? videoId,
       channelName: meta?.channelName ?? "",
-      thumbnail: buildYouTubeThumbnailUrl(videoId),
+      thumbnail: buildYouTubeThumbnailUrl(videoId, "hq720"),
       status: "past",
     });
 
