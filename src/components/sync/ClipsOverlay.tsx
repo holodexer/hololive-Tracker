@@ -1026,7 +1026,7 @@ export function ClipsOverlay({
                                   className="block w-full rounded-lg overflow-hidden bg-card border border-border hover:border-primary/50 transition-colors text-left"
                                 >
                                   {isPortrait ? (
-                                    <div className="relative aspect-[2/3] bg-muted">
+                                    <div className="relative bg-muted">
                                         {thumbUrl ? (
                                           <img src={thumbUrl} alt={item.Name} className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-[1.03]" loading="lazy" />
                                         ) : (
