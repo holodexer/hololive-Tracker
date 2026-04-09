@@ -1,6 +1,6 @@
 import { useDeferredValue, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Clock3, Command, Heart, Home, ListMusic, Radio, Search, Users } from "lucide-react";
+import { Clock3, Command, Heart, Home, ListMusic, Radio, Search, Users, VideoIcon } from "lucide-react";
 import { useHolodexStreams, useHololiveChannels } from "@/hooks/useHolodex";
 import { useSettings } from "@/contexts/SettingsContext";
 import { triggerCinema } from "@/components/CinemaOverlay";
@@ -138,6 +138,7 @@ export function GlobalSearch() {
     { icon: Home, label: t.nav.home, url: "/" },
     { icon: Heart, label: t.nav.favorites, url: "/favorites" },
     { icon: Users, label: t.nav.members, url: "/members" },
+    { icon: VideoIcon, label: t.nav.jellyfin, url: "/k-hub" },
     { icon: ListMusic, label: t.nav.playlists, url: "/playlists" },
     { icon: Radio, label: t.nav.syncWatch, url: "/sync" },
   ];

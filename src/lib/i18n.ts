@@ -16,7 +16,8 @@ export const translations = {
     // Navigation
     nav: { 
       home: "Home", 
-      members: "Members", 
+      members: "Members",
+      jellyfin: "Jellyfin", 
       clips: "Clips", 
       playlists: "Playlists", 
       search: "Search",
@@ -293,6 +294,7 @@ export const translations = {
     nav: { 
       home: "首頁", 
       members: "成員", 
+      jellyfin: "動畫",
       clips: "精華", 
       playlists: "播放清單", 
       search: "搜尋",
@@ -569,6 +571,7 @@ export const translations = {
     nav: { 
       home: "ホーム", 
       members: "メンバー", 
+      jellyfin: "アニメ",
       clips: "切り抜き", 
       playlists: "プレイリスト", 
       search: "検索",

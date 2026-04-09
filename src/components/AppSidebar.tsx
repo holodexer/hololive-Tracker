@@ -1,4 +1,4 @@
-import { Home, Users, Heart, ListMusic, MonitorPlay, Radio, Search } from "lucide-react";
+import { Home, Users, Heart, ListMusic, MonitorPlay, Radio, Search, Video } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import { useHolodexStreams, useHololiveChannels } from "@/hooks/useHolodex";
 import { useSettings } from "@/contexts/SettingsContext";
@@ -36,6 +36,7 @@ export function AppSidebar() {
     { title: t.nav.home, url: "/", icon: Home },
     { title: t.nav.favorites, url: "/favorites", icon: Heart },
     { title: t.nav.members, url: "/members", icon: Users },
+    { title: t.nav.jellyfin, url: "/k-hub", icon: Video },
     { title: t.sidebar.playlists, url: "/playlists", icon: ListMusic },
     { title: t.nav.multiView, url: "/multi-view", icon: MonitorPlay },
     { title: t.nav.syncWatch, url: "/sync", icon: Radio },

@@ -19,6 +19,7 @@ import { ROUTE_FADE_OUT_MS, ROUTE_TRANSITION_CLASS } from "@/lib/transitions";
 import Index from "./pages/Index.tsx";
 import Members from "./pages/Members.tsx";
 import MemberProfile from "./pages/MemberProfile.tsx";
+import Jellyfin from "./pages/Jellyfin.tsx";
 import Clips from "./pages/Clips.tsx";
 import Playlist from "./pages/Playlist.tsx";
 import Playlists from "./pages/Playlists.tsx";
@@ -26,6 +27,7 @@ import MultiView from "./pages/MultiView.tsx";
 import SyncWatch from "./pages/SyncWatch.tsx";
 import Favorites from "./pages/Favorites.tsx";
 import NotFound from "./pages/NotFound.tsx";
+import { ClipsOverlay } from "./components/sync/ClipsOverlay.tsx";
 
 const queryClient = new QueryClient();
 
@@ -87,6 +89,7 @@ function AppContent() {
                     <Route path="/" element={<Index />} />
                     <Route path="/favorites" element={<Favorites />} />
                     <Route path="/members" element={<Members />} />
+                    <Route path="/k-hub" element={<Jellyfin />} />
                     <Route path="/member/:channelId" element={<MemberProfile />} />
                     <Route path="/clips" element={<Clips />} />
                     <Route path="/playlists" element={<Playlists />} />
