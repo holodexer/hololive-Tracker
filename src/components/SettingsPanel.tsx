@@ -6,7 +6,6 @@ import type { Locale } from "@/lib/i18n";
 import { Switch } from "@/components/ui/switch";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
-import { toast } from "sonner";
 import { showValidationError, showSuccess } from "@/lib/errors";
 
 const localeLabels: Record<Locale, string> = {
@@ -234,6 +233,7 @@ export function SettingsPanel({ collapsed = false, externalOpen, onExternalOpenC
                     <Monitor className="w-4 h-4" />
                     {t.settings.theme}
                   </label>
+                    {/* ↓↓↓ 這裡是主題切換按鈕區塊（可在此新增葡萄紫、森林綠等主題） ↓↓↓ */}
                   <div className="flex gap-2">
                     <button
                       onClick={() => setTheme("dark")}
@@ -256,6 +256,29 @@ export function SettingsPanel({ collapsed = false, externalOpen, onExternalOpenC
                     >
                       <Sun className="w-3.5 h-3.5" />
                       {t.settings.lightMode}
+                    </button>
+
+                    <button
+                      onClick={() => setTheme("grape")}
+                      className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-sm transition-colors ${
+                        theme === "grape"
+                          ? "bg-primary text-primary-foreground"
+                          : "bg-secondary text-secondary-foreground hover:bg-muted"
+                      }`}
+                    >
+                      <span className="w-3.5 h-3.5 rounded-full bg-[#7C4DFF] border border-border block" />
+                      {t.settings.grapePurple}
+                    </button>
+                    <button
+                      onClick={() => setTheme("forest")}
+                      className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-sm transition-colors ${
+                        theme === "forest"
+                          ? "bg-primary text-primary-foreground"
+                          : "bg-secondary text-secondary-foreground hover:bg-muted"
+                      }`}
+                    >
+                      <span className="w-3.5 h-3.5 rounded-full bg-[#388E3C] border border-border block" />
+                      {t.settings.forestGreen}
                     </button>
                   </div>
                 </div>

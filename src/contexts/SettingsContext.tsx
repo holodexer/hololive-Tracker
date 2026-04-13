@@ -31,7 +31,7 @@ export interface StreamReminder {
 
 interface SettingsState {
   locale: Locale;
-  theme: "dark" | "light";
+  theme: "dark" | "light" | "grape" | "forest";
   username: string;
   avatar: string;
   directYoutube: boolean;
@@ -49,7 +49,7 @@ interface SettingsState {
 
 interface SettingsContextValue extends SettingsState {
   setLocale: (l: Locale) => void;
-  setTheme: (t: "dark" | "light") => void;
+  setTheme: (t: "dark" | "light" | "grape" | "forest") => void;
   setUsername: (value: string) => void;
   setAvatar: (value: string) => void;
   setDirectYoutube: (v: boolean) => void;
@@ -119,6 +119,8 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     document.documentElement.classList.toggle("dark", state.theme === "dark");
     document.documentElement.classList.toggle("light", state.theme === "light");
+    document.documentElement.classList.toggle("grape", state.theme === "grape");
+    document.documentElement.classList.toggle("forest", state.theme === "forest");
   }, [state.theme]);
 
   const setLocale = useCallback((locale: Locale) => setState((s) => ({ ...s, locale })), []);

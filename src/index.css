@@ -48,6 +48,86 @@
     --live: 0 84% 60%;
   }
 
+  .grape {
+    --background: 277 40% 18%;
+    --foreground: 290 40% 98%;
+    --card: 277 33% 24%;
+    --card-foreground: 290 40% 98%;
+    --popover: 277 33% 24%;
+    --popover-foreground: 290 40% 98%;
+    --primary: 272 80% 65%;
+    --primary-foreground: 277 40% 18%;
+    --secondary: 277 33% 24%;
+    --secondary-foreground: 290 40% 98%;
+    --muted: 277 19% 32%;
+    --muted-foreground: 277 20% 65%;
+    --accent: 272 80% 65%;
+    --accent-foreground: 277 40% 18%;
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 290 40% 98%;
+    --border: 277 19% 32%;
+    --input: 277 19% 32%;
+    --ring: 272 80% 65%;
+    --radius: 0.5rem;
+    --sidebar-background: 277 33% 24%;
+    --sidebar-foreground: 277 20% 65%;
+    --sidebar-primary: 272 80% 65%;
+    --sidebar-primary-foreground: 277 40% 18%;
+    --sidebar-accent: 277 19% 28%;
+    --sidebar-accent-foreground: 290 40% 98%;
+    --sidebar-border: 277 19% 32%;
+    --sidebar-ring: 272 80% 65%;
+    --live: 320 84% 60%;
+  }
+
+.forest {
+  /* 基礎色調：Hue 145 (森林綠), Saturation 降低至 15-35% */
+  --background: 145 15% 10%;       /* 深邃背景 */
+  --foreground: 145 10% 95%;       /* 柔和文字 */
+  
+  --card: 145 15% 14%;            /* 比背景稍亮，建立層次 */
+  --card-foreground: 145 10% 95%;
+  
+  --popover: 145 15% 14%;
+  --popover-foreground: 145 10% 95%;
+  
+  /* 主色：苔蘚綠，不過於刺眼 */
+  --primary: 145 35% 45%;         
+  --primary-foreground: 145 10% 98%;
+  
+  /* 次要顏色：低飽和灰色調綠 */
+  --secondary: 145 12% 22%;
+  --secondary-foreground: 145 10% 95%;
+  
+  --muted: 145 10% 25%;
+  --muted-foreground: 145 10% 65%;
+  
+  --accent: 145 25% 30%;          /* 選中或懸停時的強調色 */
+  --accent-foreground: 145 10% 95%;
+  
+  --destructive: 0 60% 50%;       /* 錯誤色稍微調暗以配合整體風格 */
+  --destructive-foreground: 0 0% 98%;
+  
+  --border: 145 10% 20%;
+  --input: 145 10% 20%;
+  --ring: 145 35% 45%;            /* 聚焦環顏色與主色一致 */
+  
+  --radius: 0.75rem;              /* 稍微圓潤一點更舒服 */
+  
+  /* 側邊欄優化 */
+  --sidebar-background: 145 18% 12%;
+  --sidebar-foreground: 145 10% 85%;
+  --sidebar-primary: 145 35% 45%;
+  --sidebar-primary-foreground: 145 10% 98%;
+  --sidebar-accent: 145 20% 18%;
+  --sidebar-accent-foreground: 145 10% 95%;
+  --sidebar-border: 145 10% 18%;
+  --sidebar-ring: 145 35% 45%;
+  
+  /* 特殊顏色 */
+  --live: 145 80% 60%;            /* 亮點色，維持一點點活潑感 */
+}
+
   .light {
     --background: 210 40% 98%;
     --foreground: 222 47% 11%;
