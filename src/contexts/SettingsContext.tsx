@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from "react";
-import { translations, type Locale, type TranslationKeys } from "@/lib/i18n";
+import { fetchTranslations, type Locale, type TranslationKeys } from "@/lib/i18n";
 
 export interface VideoMeta {
   title: string;
@@ -111,17 +111,19 @@ const SettingsContext = createContext<SettingsContextValue | null>(null);
 
 export function SettingsProvider({ children }: { children: React.ReactNode }) {
   const [state, setState] = useState<SettingsState>(loadSettings);
+  const [tDict, setTDict] = useState<TranslationKeys | null>(null);
+
+  useEffect(() => {
+    fetchTranslations(state.locale).then(setTDict);
+  }, [state.locale]);
 
   useEffect(() => {
     saveSettings(state);
+    
+    // Crucial for Portals: Radix UI dropdowns, Dialogs, etc mount outside of the standard React root.
+    // They must inherit CSS vars from the HTML root.
+    document.documentElement.className = state.theme;
   }, [state]);
-
-  useEffect(() => {
-    document.documentElement.classList.toggle("dark", state.theme === "dark");
-    document.documentElement.classList.toggle("light", state.theme === "light");
-    document.documentElement.classList.toggle("grape", state.theme === "grape");
-    document.documentElement.classList.toggle("forest", state.theme === "forest");
-  }, [state.theme]);
 
   const setLocale = useCallback((locale: Locale) => setState((s) => ({ ...s, locale })), []);
   const setTheme = useCallback((theme: "dark" | "light") => setState((s) => ({ ...s, theme })), []);
@@ -251,6 +253,10 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
     }));
   }, []);
 
+  if (!tDict) {
+    return null; // Or a minimal loading state to avoid crashing when children access t.app.title
+  }
+
   const value: SettingsContextValue = {
     ...state,
     setLocale,
@@ -277,7 +283,7 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
     toggleReminder,
     hasReminder,
     markReminderNotified,
-    t: translations[state.locale],
+    t: tDict,
   };
 
   return <SettingsContext.Provider value={value}>{children}</SettingsContext.Provider>;

@@ -1,3 +1,10 @@
+/**
+ * @file src/pages/SyncWatch.tsx
+ * @description 核心的影音同步房間 (SyncWatch 系統)。
+ * 啟動與管理 YouTube 或直接媒體的播放器，處理 WebSocket 狀態廣播、會員進出管理以及播放列的同步。
+ * 這是專案內最複雜的頁面，所有的副作用 (useEffect) 都牽涉到時序校準 (Time Drift)。
+ */
+
 import { useState, useRef, useCallback, useEffect, useMemo } from "react";
 import { useSearchParams } from "react-router-dom";
 import { Radio, Copy, Plus, Users, RefreshCw, ArrowLeft, Wifi, WifiOff, RotateCcw, VolumeX, Play } from "lucide-react";
@@ -352,8 +359,9 @@ export default function SyncWatch() {
     }
   }, [currentMedia]);
 
-  // YouTube player init — YT operates on a freshly-created inner div so that
-  // playerContainerRef (managed by React) is never replaced by the YT iframe.
+  // --- 事件處理與副作用：YouTube 播放器初始化 ---
+  // YouTube API 使用獨立的內部 div 作為掛載點，這樣 playerContainerRef 才能穩定的被 React 持有。
+  // 若直接讓 YouTube 覆寫 React 的 Element，未來卸載元件時會造成 Detached DOM 內存洩漏。
   useEffect(() => {
     if (!currentVideoId || !playerContainerRef.current || currentMedia?.source !== "youtube") return;
 
@@ -367,9 +375,7 @@ export default function SyncWatch() {
         return;
       }
 
-      // Create a fresh inner target — YT will replace this with its iframe.
-      // The outer container (playerContainerRef) stays stable so React never
-      // operates on a detached node.
+      // 建立一個臨時內部容器，YouTube 掛載後會將其置換成 iframe。
       const container = playerContainerRef.current!;
       container.innerHTML = "";
       const inner = document.createElement("div");
@@ -418,14 +424,15 @@ export default function SyncWatch() {
     return () => { cancelled = true; };
   }, [currentVideoId, currentMedia]);
 
-  // Apply sync state: check video ID first, then seek
+  // --- 狀態廣播與同步處理 (State Sync Engine) ---
+  // 將房間房主的播放狀態、進度套用到全體成員本地播放器的核心邏輯。
   useEffect(() => {
     if (!syncState) return;
 
-    // Host ignores incoming sync unless guest control is on
+    // 若為房主，除非開放了「訪客控制(guestControlEnabled)」，否則不理會其他人的廣播
     if (effectiveHost && !guestControlEnabled) return;
 
-    // During video change lock, discard stale broadcasts with wrong video ID
+    // 防止網速較慢的設備在切換影片時，收到舊影片的暫停/播放廣播而造成抖動
     if (videoChangeLockRef.current && syncState.videoId !== currentVideoIdRef.current) return;
 
     // If different video, load it (from host's video_change broadcast)

@@ -1,3 +1,10 @@
+/**
+ * @file src/components/SettingsPanel.tsx
+ * @description 全域設定面板元件。
+ * 負責處理使用者設定、主題切換、備份匯入匯出以及影片過濾參數。
+ * 支援以彈出式 Modal (Portal) 渲染，避免受母層 (如 Sidebar) z-index 影響。
+ */
+
 import { useSettings } from "@/contexts/SettingsContext";
 import { Settings, Globe, Moon, Sun, Monitor, Filter, Languages, Download, Upload, User, ImagePlus, Trash2, Server } from "lucide-react";
 import { useState, useRef, useEffect } from "react";
@@ -22,13 +29,31 @@ const clipLangOptions = [
 
 type SettingsTab = "user" | "general" | "filter" | "backup";
 
-export function SettingsPanel({ collapsed = false, externalOpen, onExternalOpenChange }: { collapsed?: boolean; externalOpen?: boolean; onExternalOpenChange?: (open: boolean) => void }) {
+interface SettingsPanelProps {
+  /** 外部傳入是否為收起樣式，通常由側邊欄操控 */
+  collapsed?: boolean;
+  /** 外部強制覆寫開啟狀態 (Controlled Component) */
+  externalOpen?: boolean;
+  /** 外部狀態變更回呼函式 */
+  onExternalOpenChange?: (open: boolean) => void;
+}
+
+export function SettingsPanel({
+  collapsed: isCollapsed = false,
+  externalOpen,
+  onExternalOpenChange,
+}: SettingsPanelProps) {
+  // --- 狀態定義 (State) ---
   const [internalOpen, setInternalOpen] = useState(false);
-  const open = externalOpen !== undefined ? externalOpen : internalOpen;
-  const setOpen = onExternalOpenChange || setInternalOpen;
+  const isOpen = externalOpen !== undefined ? externalOpen : internalOpen;
+  const setIsOpen = onExternalOpenChange || setInternalOpen;
   const [activeTab, setActiveTab] = useState<SettingsTab>("user");
+  
+  // --- Refs (用來觸發原生存取行為) ---
   const fileInputRef = useRef<HTMLInputElement>(null);
   const avatarInputRef = useRef<HTMLInputElement>(null);
+
+  // --- 全域 Context 資料取得 ---
   const {
     locale, theme, username, avatar, directYoutube, hideInactive, hidePrivateVideos, clipLanguages,
     jellyfinUrl, jellyfinToken,
@@ -37,6 +62,9 @@ export function SettingsPanel({ collapsed = false, externalOpen, onExternalOpenC
     exportConfig, importConfig, t,
   } = useSettings();
 
+  // --- 事件處理常式 (Event Handlers) ---
+
+  /** 處理大頭貼圖片上傳並自動裁切縮放 */
   const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -51,9 +79,9 @@ export function SettingsPanel({ collapsed = false, externalOpen, onExternalOpenC
     if (avatarInputRef.current) avatarInputRef.current.value = "";
   };
 
-  // Scroll lock when settings is open
+  /** 當面板開啟時，鎖住底層畫面無法滾動 (Scroll Lock) */
   useEffect(() => {
-    if (open) {
+    if (isOpen) {
       document.body.style.overflow = "hidden";
     } else {
       document.body.style.overflow = "";
@@ -61,8 +89,9 @@ export function SettingsPanel({ collapsed = false, externalOpen, onExternalOpenC
     return () => {
       document.body.style.overflow = "";
     };
-  }, [open]);
+  }, [isOpen]);
 
+  /** 匯出目前的設定為 JSON 檔案 */
   const handleExport = () => {
     const json = exportConfig();
     const blob = new Blob([json], { type: "application/json" });
@@ -74,6 +103,7 @@ export function SettingsPanel({ collapsed = false, externalOpen, onExternalOpenC
     URL.revokeObjectURL(url);
   };
 
+  /** 解析使用者傳入的 JSON 檔案並匯入設定 */
   const handleImport = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -82,6 +112,7 @@ export function SettingsPanel({ collapsed = false, externalOpen, onExternalOpenC
       const success = importConfig(reader.result as string);
       if (success) {
         showSuccess(t.settings.importSuccess);
+        // 設定一完成立刻重整確保全域狀態一致性
         setTimeout(() => window.location.reload(), 800);
       } else {
         showValidationError(t.settings.importError);
@@ -98,34 +129,42 @@ export function SettingsPanel({ collapsed = false, externalOpen, onExternalOpenC
     { key: "backup", label: t.settings.tabBackup },
   ];
 
+  // --- 畫面渲染 (Render) ---
   return (
     <>
+      {/* 獨立啟動按鈕：當沒有由外部強制控制時，渲染開啟面板的按鈕 */}
       {externalOpen === undefined && (
         <button
-          onClick={() => setOpen(true)}
+          onClick={() => setIsOpen(true)}
           className={`flex items-center gap-2 text-sm text-sidebar-foreground hover:bg-sidebar-accent rounded-md transition-colors ${
-            collapsed
+            isCollapsed
               ? "mx-auto h-8 w-8 justify-center p-0"
               : "w-full px-3 py-2"
           }`}
         >
           <Settings className="h-4 w-4 shrink-0" />
-          {!collapsed && <span>{t.nav.settings}</span>}
+          {!isCollapsed && <span>{t.nav.settings}</span>}
         </button>
       )}
 
-      {open && createPortal(
+      {/* 
+        利用 createPortal 將面板直接掛載到 body，
+        這樣設定的 Tailwind 主題變數 (繼承自 <html> class) 才能順利穿透進來，
+        且不會受到外層容器 z-index 或 overflow hidden 的破壞。
+      */}
+      {isOpen && createPortal(
         <div
           className="fixed inset-0 z-[200] flex items-center justify-center bg-black/80 backdrop-blur-md"
-          onClick={() => setOpen(false)}
+          onClick={() => setIsOpen(false)}
         >
+          {/* 面板主體 */}
           <div
             className="bg-background border border-border rounded-xl w-full max-w-lg p-6 space-y-5 max-h-[90vh] overflow-y-auto shadow-2xl relative z-[201]"
             onClick={(e) => e.stopPropagation()}
           >
             <h2 className="text-lg font-bold text-foreground">{t.settings.title}</h2>
 
-            {/* Tab Bar */}
+            {/* --- 分頁列 (Tab Navigation) --- */}
             <div className="flex border-b border-border">
               {tabs.map((tab) => (
                 <button
@@ -142,7 +181,7 @@ export function SettingsPanel({ collapsed = false, externalOpen, onExternalOpenC
               ))}
             </div>
 
-            {/* User Tab */}
+            {/* --- 【使用者分頁】 (User Settings) --- */}
             {activeTab === "user" && (
               <div className="space-y-5">
                 <div className="space-y-2">
@@ -203,7 +242,7 @@ export function SettingsPanel({ collapsed = false, externalOpen, onExternalOpenC
               </div>
             )}
 
-            {/* General Tab */}
+            {/* --- 【全域分頁】 (General Settings) --- */}
             {activeTab === "general" && (
               <div className="space-y-5">
                 <div className="space-y-2">
@@ -233,7 +272,6 @@ export function SettingsPanel({ collapsed = false, externalOpen, onExternalOpenC
                     <Monitor className="w-4 h-4" />
                     {t.settings.theme}
                   </label>
-                    {/* ↓↓↓ 這裡是主題切換按鈕區塊（可在此新增葡萄紫、森林綠等主題） ↓↓↓ */}
                   <div className="flex gap-2">
                     <button
                       onClick={() => setTheme("dark")}
@@ -283,6 +321,7 @@ export function SettingsPanel({ collapsed = false, externalOpen, onExternalOpenC
                   </div>
                 </div>
 
+                {/* 影音播放器偏好 */}
                 <div className="space-y-2">
                   <label className="text-sm font-medium text-muted-foreground">{t.settings.playback}</label>
                   <div className="flex items-center justify-between">
@@ -294,6 +333,7 @@ export function SettingsPanel({ collapsed = false, externalOpen, onExternalOpenC
                   </div>
                 </div>
 
+                {/* 私人的 Jellyfin 媒體庫位置設定 */}
                 <div className="space-y-2">
                   <label className="text-sm font-medium text-muted-foreground flex items-center gap-2">
                     <Server className="w-4 h-4" />
@@ -318,7 +358,7 @@ export function SettingsPanel({ collapsed = false, externalOpen, onExternalOpenC
               </div>
             )}
 
-            {/* Content Filter Tab */}
+            {/* --- 【過濾器分頁】 (Content Filter) --- */}
             {activeTab === "filter" && (
               <div className="space-y-5">
                 <div className="space-y-3">
@@ -363,7 +403,7 @@ export function SettingsPanel({ collapsed = false, externalOpen, onExternalOpenC
               </div>
             )}
 
-            {/* Backup Tab */}
+            {/* --- 【備份分頁】 (Backup & Import) --- */}
             {activeTab === "backup" && (
               <div className="space-y-5">
                 <div className="space-y-3">
@@ -407,8 +447,9 @@ export function SettingsPanel({ collapsed = false, externalOpen, onExternalOpenC
               </div>
             )}
 
+            {/* 面板關閉按鈕 */}
             <button
-              onClick={() => setOpen(false)}
+              onClick={() => setIsOpen(false)}
               className="w-full py-2 rounded-md bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition-colors"
             >
               {locale === "zh-TW" ? "關閉" : locale === "ja" ? "閉じる" : "Close"}
@@ -421,6 +462,10 @@ export function SettingsPanel({ collapsed = false, externalOpen, onExternalOpenC
   );
 }
 
+/**
+ * --- 工具函式區域 ---
+ * 實作圖片上傳時的前端壓縮，避免存入 localStorage 時佔用過多記憶體造成 QuotaExceededError
+ */
 function resizeImageToDataUrl(file: File, maxSize: number): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -433,6 +478,8 @@ function resizeImageToDataUrl(file: File, maxSize: number): Promise<string> {
         const scale = Math.min(maxSize / image.width, maxSize / image.height, 1);
         const width = Math.max(1, Math.round(image.width * scale));
         const height = Math.max(1, Math.round(image.height * scale));
+        
+        // 利用 Canvas 進行繪圖重設大小
         const canvas = document.createElement("canvas");
         canvas.width = width;
         canvas.height = height;
@@ -441,9 +488,12 @@ function resizeImageToDataUrl(file: File, maxSize: number): Promise<string> {
           reject(new Error("canvas_failed"));
           return;
         }
+        
+        // 降低解析度後壓縮為 JPG，最高效率節省體積
         context.drawImage(image, 0, 0, width, height);
         resolve(canvas.toDataURL("image/jpeg", 0.88));
       };
+      // 利用 Blob URL 載入圖片資料
       image.src = String(reader.result);
     };
 

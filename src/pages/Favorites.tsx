@@ -1,148 +1,47 @@
-import { useState, useCallback, useEffect } from "react";
+/**
+ * @file src/pages/Favorites.tsx
+ * @description 呈現使用者收藏庫 (Favorites) 內所有頻道的相關多媒體。
+ * 包含三個主要分頁：即將直播/正在直播、歷史存檔、精華剪輯。
+ */
+
+import { useState } from "react";
+import { format } from "date-fns";
+import { Radio, Archive, Film, Heart, Loader2 } from "lucide-react";
+
 import { useSettings } from "@/contexts/SettingsContext";
 import { useHolodexStreams } from "@/hooks/useHolodex";
-import { fetchChannelVideos, fetchChannelClips, type HolodexVideo } from "@/lib/holodex";
+import { useFavoritesMedia } from "@/hooks/useFavoritesMedia";
 import { filterUnavailableVideos } from "@/lib/videoFilters";
-import { mixClipsByLanguage } from "@/lib/clipMixing";
+import { TAB_PANEL_TRANSITION_CLASS } from "@/lib/transitions";
+import { LAYOUT_STYLES } from "@/lib/styles";
+
 import { StreamCard } from "@/components/StreamCard";
 import { LoadTransition } from "@/components/LoadTransition";
 import { StaggerList } from "@/components/StaggerList";
-import { Heart, Loader2, Radio, Archive, Film, Clock } from "lucide-react";
-import { useQuery } from "@tanstack/react-query";
-import { format } from "date-fns";
-import { addDays, isAfter, isBefore } from "date-fns";
-import { TAB_PANEL_TRANSITION_CLASS } from "@/lib/transitions";
 import { PageHeader } from "@/components/PageHeader";
 
-const PAGE_SIZE = 48;
-
 export default function Favorites() {
-  const { favorites, clipLanguages, hidePrivateVideos, locale, t } = useSettings();
-  const { data: liveData, isLoading: liveLoading } = useHolodexStreams();
+  const { favorites, hidePrivateVideos, t } = useSettings();
+  const { data: liveData, isLoading: isLiveLoading } = useHolodexStreams();
+  
+  // --- 自定義 Hook 抽取邏輯 ---
+  const {
+    archiveVideos,
+    hasMoreArchives,
+    isArchiveInitLoading,
+    isArchivingLoadingMore,
+    loadMoreArchives,
+    clipVideos,
+    hasMoreClips,
+    isClipsInitLoading,
+    isClipsLoadingMore,
+    loadMoreClips,
+  } = useFavoritesMedia();
+
+  // --- 狀態定義 ---
   const [activeTab, setActiveTab] = useState<"live" | "archives" | "clips">("live");
 
-  const fallbackClipLang = locale === "ja" ? "ja" : locale === "zh-TW" ? "zh" : "en";
-  const activeClipLangs = clipLanguages.length > 0 ? clipLanguages : [fallbackClipLang];
-  const clipLangKey = activeClipLangs.join("|");
-  const favSet = new Set(favorites);
-
-  // Archives state
-  const [archiveVideos, setArchiveVideos] = useState<HolodexVideo[]>([]);
-  const [archivePage, setArchivePage] = useState(0);
-  const [archiveHasMore, setArchiveHasMore] = useState(true);
-  const [archiveLoadingMore, setArchiveLoadingMore] = useState(false);
-
-  // Clips state
-  const [clipVideos, setClipVideos] = useState<HolodexVideo[]>([]);
-  const [clipsPage, setClipsPage] = useState(0);
-  const [clipsHasMore, setClipsHasMore] = useState(true);
-  const [clipsLoadingMore, setClipsLoadingMore] = useState(false);
-
-  // Reset clips when language changes
-  useEffect(() => {
-    setClipVideos([]);
-    setClipsPage(0);
-    setClipsHasMore(true);
-  }, [locale, clipLangKey, hidePrivateVideos]);
-
-  useEffect(() => {
-    setArchiveVideos([]);
-    setArchivePage(0);
-    setArchiveHasMore(true);
-  }, [hidePrivateVideos]);
-
-  // Initial archives fetch (per-member, merged)
-  const { isLoading: archiveInitLoading } = useQuery({
-    queryKey: ["favorites-archives-init", favorites.join(","), hidePrivateVideos],
-    queryFn: async () => {
-      if (favorites.length === 0) return [];
-      const results = await Promise.all(
-        favorites.map((chId) => fetchChannelVideos(chId, "stream", "past", PAGE_SIZE, 0))
-      );
-      const mergedRaw = results
-        .flat()
-        .sort((a, b) => new Date(b.available_at).getTime() - new Date(a.available_at).getTime());
-      const merged = filterUnavailableVideos(mergedRaw, hidePrivateVideos);
-      setArchiveVideos(merged);
-      setArchivePage(1);
-      setArchiveHasMore(results.some((r) => r.length >= PAGE_SIZE));
-      return merged;
-    },
-    enabled: favorites.length > 0,
-  });
-
-  // Initial clips fetch (per-member, merged)
-  const { isLoading: clipsInitLoading } = useQuery({
-    queryKey: ["favorites-clips-init", favorites.join(","), clipLangKey, locale, hidePrivateVideos],
-    queryFn: async () => {
-      if (favorites.length === 0) return [];
-      const results = await Promise.all(
-        activeClipLangs.map(async (lang) => {
-          const byChannel = await Promise.all(
-            favorites.map((chId) => fetchChannelClips(chId, PAGE_SIZE, 0, lang))
-          );
-          return {
-            lang,
-            videos: byChannel.flat(),
-            hasMore: byChannel.some((items) => items.length >= PAGE_SIZE),
-          };
-        })
-      );
-      const mixed = mixClipsByLanguage(results.map(({ lang, videos }) => ({ lang, videos })));
-      const merged = filterUnavailableVideos(mixed, hidePrivateVideos);
-      setClipVideos(merged);
-      setClipsPage(1);
-      setClipsHasMore(results.some((result) => result.hasMore));
-      return merged;
-    },
-    enabled: favorites.length > 0,
-  });
-
-  const handleLoadMoreArchives = useCallback(async () => {
-    setArchiveLoadingMore(true);
-    try {
-      const offset = archivePage * PAGE_SIZE;
-      const results = await Promise.all(
-        favorites.map((chId) => fetchChannelVideos(chId, "stream", "past", PAGE_SIZE, offset))
-      );
-      const mergedRaw = results
-        .flat()
-        .sort((a, b) => new Date(b.available_at).getTime() - new Date(a.available_at).getTime());
-      const merged = filterUnavailableVideos(mergedRaw, hidePrivateVideos);
-      setArchiveVideos((prev) => [...prev, ...merged]);
-      setArchivePage((p) => p + 1);
-      if (results.every((r) => r.length < PAGE_SIZE)) setArchiveHasMore(false);
-    } finally {
-      setArchiveLoadingMore(false);
-    }
-  }, [favorites, archivePage, hidePrivateVideos]);
-
-  const handleLoadMoreClips = useCallback(async () => {
-    setClipsLoadingMore(true);
-    try {
-      const offset = clipsPage * PAGE_SIZE;
-      const results = await Promise.all(
-        activeClipLangs.map(async (lang) => {
-          const byChannel = await Promise.all(
-            favorites.map((chId) => fetchChannelClips(chId, PAGE_SIZE, offset, lang))
-          );
-          return {
-            lang,
-            videos: byChannel.flat(),
-            hasMore: byChannel.some((items) => items.length >= PAGE_SIZE),
-          };
-        })
-      );
-      const mixed = mixClipsByLanguage(results.map(({ lang, videos }) => ({ lang, videos })));
-      const merged = filterUnavailableVideos(mixed, hidePrivateVideos);
-      setClipVideos((prev) => [...prev, ...merged]);
-      setClipsPage((p) => p + 1);
-      if (!results.some((result) => result.hasMore)) setClipsHasMore(false);
-    } finally {
-      setClipsLoadingMore(false);
-    }
-  }, [favorites, clipsPage, clipLangKey, hidePrivateVideos]);
-
+  // 若使用者尚未收藏任何頻道，直接顯示佔位空狀態
   if (favorites.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4 text-muted-foreground">
@@ -152,22 +51,27 @@ export default function Favorites() {
     );
   }
 
-  // Live + Upcoming from favorites
+  // --- 資料處理與衍生狀態 ---
+  const favSet = new Set(favorites);
+
+  // 1. 直播資料與預定資料過濾
   const favLiveRaw = (liveData?.live ?? []).filter((v) => favSet.has(v.channel.id));
   const favUpcomingRaw = (liveData?.upcoming ?? []).filter((v) => favSet.has(v.channel.id));
+  
   const favLive = filterUnavailableVideos(favLiveRaw, hidePrivateVideos);
   const favUpcoming = filterUnavailableVideos(favUpcomingRaw, hidePrivateVideos);
 
-  // Sort live by viewers desc
+  // 排序正在直播的頻道：根據觀看人數由大至小排列
   const sortedFavLive = [...favLive].sort((a, b) => (b.live_viewers ?? 0) - (a.live_viewers ?? 0));
 
-  // Group upcoming by date (same as Index page)
+  // 2. 結合即將開播的行程表依日期分組
   const upcomingByDate = new Map<string, typeof favUpcoming>();
   favUpcoming.forEach((s) => {
     const dateKey = format(new Date(s.available_at), "yyyy-MM-dd");
     if (!upcomingByDate.has(dateKey)) upcomingByDate.set(dateKey, []);
     upcomingByDate.get(dateKey)!.push(s);
   });
+  
   const sortedDates = Array.from(upcomingByDate.entries()).sort(([a], [b]) => a.localeCompare(b));
 
   const tabs = [
@@ -176,6 +80,7 @@ export default function Favorites() {
     { key: "clips" as const, label: t.favorites.clips, icon: Film },
   ];
 
+  // --- 渲染架構 ---
   return (
     <div className="space-y-6">
       <PageHeader
@@ -183,37 +88,42 @@ export default function Favorites() {
         badge={`${favorites.length}`}
         description={favorites.length === 0 ? t.favorites.noFavorites : undefined}
       />
-      {/* Tabs */}
+
+      {/* --- 頁籤導航區塊 --- */}
       <div className="flex gap-1 border-b border-border">
-        {tabs.map((tab) => (
-          <button
-            key={tab.key}
-            onClick={() => setActiveTab(tab.key)}
-            className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${
-              activeTab === tab.key
-                ? "border-primary text-primary"
-                : "border-transparent text-muted-foreground hover:text-foreground"
-            }`}
-          >
-            <tab.icon className="w-4 h-4" />
-            {tab.label}
-            {tab.key === "live" && tab.count !== undefined && tab.count > 0 && (
-              <span className="px-1.5 py-0.5 rounded-full bg-live/20 text-live text-[10px] font-bold">
-                {tab.count}
-              </span>
-            )}
-          </button>
-        ))}
+        {tabs.map((tab) => {
+          const isSelected = activeTab === tab.key;
+          return (
+            <button
+              key={tab.key}
+              onClick={() => setActiveTab(tab.key)}
+              className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${
+                isSelected
+                  ? "border-primary text-primary"
+                  : "border-transparent text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              <tab.icon className="w-4 h-4" />
+              {tab.label}
+              {tab.key === "live" && tab.count !== undefined && tab.count > 0 && (
+                <span className="px-1.5 py-0.5 rounded-full bg-live/20 text-live text-[10px] font-bold">
+                  {tab.count}
+                </span>
+              )}
+            </button>
+          );
+        })}
       </div>
 
-      {/* Live + Upcoming Tab */}
+      {/* --- 主要內容區塊 --- */}
+      {/* 1. 直播與即將開播 */}
       {activeTab === "live" && (
         <div key="tab-live" className={`space-y-10 ${TAB_PANEL_TRANSITION_CLASS}`}>
-          {liveLoading ? (
+          {isLiveLoading ? (
             <LoadTransition loading={true} minHeightClassName="py-20">null</LoadTransition>
           ) : (
             <>
-              {/* Live Now */}
+              {/* 進行中直播 */}
               <section>
                 <div className="flex items-center gap-3 mb-4">
                   <h2 className="text-xl font-bold text-foreground">{t.home.liveNow}</h2>
@@ -230,7 +140,7 @@ export default function Favorites() {
                 {sortedFavLive.length === 0 ? (
                   <p className="text-muted-foreground">{t.favorites.noLive}</p>
                 ) : (
-                  <StaggerList className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                  <StaggerList className={LAYOUT_STYLES.cardGrid}>
                     {sortedFavLive.map((s) => (
                       <StreamCard key={s.id} stream={s} />
                     ))}
@@ -238,7 +148,7 @@ export default function Favorites() {
                 )}
               </section>
 
-              {/* Upcoming */}
+              {/* 行程表 */}
               <section>
                 <div className="flex items-center gap-3 mb-4">
                   <h2 className="text-xl font-bold text-foreground">{t.home.upcomingStreams}</h2>
@@ -298,29 +208,30 @@ export default function Favorites() {
         </div>
       )}
 
-      {/* Archives Tab */}
+      {/* 2. 歷史存檔庫 */}
       {activeTab === "archives" && (
         <div key="tab-archives" className={TAB_PANEL_TRANSITION_CLASS}>
-          {archiveInitLoading ? (
+          {isArchiveInitLoading ? (
             <LoadTransition loading={true} minHeightClassName="py-8" loaderClassName="w-6 h-6">null</LoadTransition>
           ) : archiveVideos.length === 0 ? (
             <p className="text-muted-foreground">{t.favorites.noArchives}</p>
           ) : (
             <>
-              <StaggerList className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              <StaggerList className={LAYOUT_STYLES.cardGrid}>
                 {archiveVideos.map((s) => (
                   <StreamCard key={s.id} stream={s} />
                 ))}
               </StaggerList>
-              {archiveHasMore && (
+              
+              {hasMoreArchives && (
                 <div className="flex justify-center mt-6">
                   <button
                     type="button"
-                    onClick={(e) => { e.preventDefault(); handleLoadMoreArchives(); }}
-                    disabled={archiveLoadingMore}
+                    onClick={(e) => { e.preventDefault(); loadMoreArchives(); }}
+                    disabled={isArchivingLoadingMore}
                     className="px-6 py-2 rounded-md bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition-colors disabled:opacity-50"
                   >
-                    {archiveLoadingMore && <Loader2 className="w-4 h-4 animate-spin inline mr-2" />}
+                    {isArchivingLoadingMore && <Loader2 className="w-4 h-4 animate-spin inline mr-2" />}
                     {t.common.loadMore}
                   </button>
                 </div>
@@ -330,29 +241,30 @@ export default function Favorites() {
         </div>
       )}
 
-      {/* Clips Tab */}
+      {/* 3. 精華剪輯庫 */}
       {activeTab === "clips" && (
         <div key="tab-clips" className={TAB_PANEL_TRANSITION_CLASS}>
-          {clipsInitLoading ? (
+          {isClipsInitLoading ? (
             <LoadTransition loading={true} minHeightClassName="py-8" loaderClassName="w-6 h-6">null</LoadTransition>
           ) : clipVideos.length === 0 ? (
             <p className="text-muted-foreground">{t.favorites.noClips}</p>
           ) : (
             <>
-              <StaggerList className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              <StaggerList className={LAYOUT_STYLES.cardGrid}>
                 {clipVideos.map((s) => (
                   <StreamCard key={s.id} stream={s} />
                 ))}
               </StaggerList>
-              {clipsHasMore && (
+              
+              {hasMoreClips && (
                 <div className="flex justify-center mt-6">
                   <button
                     type="button"
-                    onClick={(e) => { e.preventDefault(); handleLoadMoreClips(); }}
-                    disabled={clipsLoadingMore}
+                    onClick={(e) => { e.preventDefault(); loadMoreClips(); }}
+                    disabled={isClipsLoadingMore}
                     className="px-6 py-2 rounded-md bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition-colors disabled:opacity-50"
                   >
-                    {clipsLoadingMore && <Loader2 className="w-4 h-4 animate-spin inline mr-2" />}
+                    {isClipsLoadingMore && <Loader2 className="w-4 h-4 animate-spin inline mr-2" />}
                     {t.common.loadMore}
                   </button>
                 </div>

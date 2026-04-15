@@ -1,3 +1,9 @@
+/**
+ * @file src/components/AppSidebar.tsx
+ * @description 應用程式的核心常駐側邊欄 (Sidebar) 元件。
+ * 負責全站路由導航、全域搜尋呼叫、以及將最愛頻道依照「是否開播」進行排序與狀態展示。
+ */
+
 import { Home, Users, Heart, ListMusic, MonitorPlay, Radio, Search, Video } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import { useHolodexStreams, useHololiveChannels } from "@/hooks/useHolodex";
@@ -19,19 +25,25 @@ import {
   SidebarTrigger,
   useSidebar,
 } from "@/components/ui/sidebar";
-import { getDisplayName, getChannelPhotoUrl } from "@/lib/utils";
+import { getDisplayName, getChannelPhotoUrl, cn } from "@/lib/utils";
 
 export function AppSidebar() {
+  // --- 狀態定義 ---
   const { state } = useSidebar();
-  const collapsed = state === "collapsed";
-  const { data } = useHolodexStreams();
-  const { data: channels } = useHololiveChannels();
+  const isSidebarCollapsed = state === "collapsed";
+  const { data: streamsData } = useHolodexStreams();
+  const { data: channelsData } = useHololiveChannels();
   const { favorites, locale, t } = useSettings();
   const navigate = useNavigate();
-  const shortcutLabel = typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform)
+
+  // --- 衍生資料邏輯 ---
+  
+  // 依照裝置作業系統動態顯示搜尋快捷鍵
+  const searchShortcutLabel = typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform)
     ? "Cmd+K"
     : "Ctrl+K";
 
+  // 主導航清單
   const navItems = [
     { title: t.nav.home, url: "/", icon: Home },
     { title: t.nav.favorites, url: "/favorites", icon: Heart },
@@ -42,19 +54,24 @@ export function AppSidebar() {
     { title: t.nav.syncWatch, url: "/sync", icon: Radio },
   ];
 
-  const liveChannelIds = new Set(data?.live?.map((v) => v.channel.id) ?? []);
-  const favoriteChannels = channels?.filter((ch) => favorites.includes(ch.id)) ?? [];
+  // 將所有直播中的頻道 ID 列為 Set 以便於 O(1) 查找
+  const activeLiveChannelIds = new Set(streamsData?.live?.map((v) => v.channel.id) ?? []);
+  
+  // 篩選出具備完整資訊的收藏頻道
+  const favoritedChannels = channelsData?.filter((ch) => favorites.includes(ch.id)) ?? [];
 
-  const sortedFavorites = [...favoriteChannels].sort((a, b) => {
-    const aLive = liveChannelIds.has(a.id) ? 0 : 1;
-    const bLive = liveChannelIds.has(b.id) ? 0 : 1;
-    return aLive - bLive;
+  // 排序邏輯：正在直播中的頻道強制置頂顯示
+  const sortedFavoritedChannels = [...favoritedChannels].sort((chA, chB) => {
+    const isALive = activeLiveChannelIds.has(chA.id) ? 0 : 1;
+    const isBLive = activeLiveChannelIds.has(chB.id) ? 0 : 1;
+    return isALive - isBLive;
   });
 
-
-
+  // --- 畫面渲染 ---
   return (
     <Sidebar collapsible="icon" className="border-r border-border">
+      
+      {/* 側邊欄頂部：Logo 區塊 */}
       <SidebarHeader className="border-b border-border/40">
         <div className="flex items-center justify-between px-3 py-2.5 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-2">
           <div className="flex items-center gap-2.5 min-w-0 group-data-[collapsible=icon]:hidden">
@@ -68,7 +85,9 @@ export function AppSidebar() {
           <SidebarTrigger className="shrink-0" />
         </div>
       </SidebarHeader>
+
       <SidebarContent>
+        {/* 全域搜尋按鈕 */}
         <div className="px-2 pt-3 pb-1">
           <button
             type="button"
@@ -78,10 +97,11 @@ export function AppSidebar() {
           >
             <Search className="h-4 w-4 shrink-0 text-primary" />
             <span className="min-w-0 flex-1 truncate group-data-[collapsible=icon]:hidden">{t.nav.search}</span>
-            <span className="text-[11px] text-muted-foreground group-data-[collapsible=icon]:hidden">{shortcutLabel}</span>
+            <span className="text-[11px] text-muted-foreground group-data-[collapsible=icon]:hidden">{searchShortcutLabel}</span>
           </button>
         </div>
 
+        {/* 網站主要導航區 (Main Navigation) */}
         <SidebarGroup>
           <SidebarGroupLabel className="text-primary font-bold text-xs tracking-widest uppercase">
             {t.sidebar.navigation}
@@ -107,8 +127,8 @@ export function AppSidebar() {
           </SidebarGroupContent>
         </SidebarGroup>
 
-        {/* Favorites */}
-        {sortedFavorites.length > 0 && (
+        {/* 收藏頻道捷徑 (Favorites Shortcuts) */}
+        {sortedFavoritedChannels.length > 0 && (
           <SidebarGroup>
             <SidebarGroupLabel className="text-pink-400 font-bold text-xs tracking-widest uppercase flex items-center gap-1">
               <Heart className="w-3 h-3 fill-current" />
@@ -116,9 +136,9 @@ export function AppSidebar() {
             </SidebarGroupLabel>
             <SidebarGroupContent>
               <SidebarMenu>
-                {sortedFavorites.map((ch) => {
-                  const isLive = liveChannelIds.has(ch.id);
-                  const name = getDisplayName(ch, locale);
+                {sortedFavoritedChannels.map((ch) => {
+                  const isCurrentlyLive = activeLiveChannelIds.has(ch.id);
+                  const channelDisplayName = getDisplayName(ch, locale);
 
                   return (
                     <SidebarMenuItem key={ch.id}>
@@ -130,7 +150,7 @@ export function AppSidebar() {
                           <span className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-full">
                             <img
                               src={getChannelPhotoUrl(ch.photo)}
-                              alt={name}
+                              alt={channelDisplayName}
                               onError={(e) => {
                                 const img = e.currentTarget;
                                 if (!img.dataset.fallbackTried) {
@@ -141,15 +161,17 @@ export function AppSidebar() {
                                 img.onerror = null;
                                 img.src = "/channel-placeholder.svg";
                               }}
-                              className={`h-full w-full rounded-full object-cover aspect-square ${
-                                isLive ? "ring-[3px] ring-live shadow-[0_0_12px_hsl(var(--live)/0.6)] group-data-[collapsible=icon]:animate-none group-data-[collapsible=icon]:shadow-none" : ""
-                              }`}
+                              className={cn("h-full w-full rounded-full object-cover aspect-square", {
+                                "ring-[3px] ring-live shadow-[0_0_12px_hsl(var(--live)/0.6)] group-data-[collapsible=icon]:animate-none group-data-[collapsible=icon]:shadow-none": isCurrentlyLive
+                              })}
                             />
                           </span>
                           <span className="text-xs text-sidebar-foreground truncate">
-                            {name}
+                            {channelDisplayName}
                           </span>
-                          {isLive && (
+                          
+                          {/* 如果正在實況中，顯示動態的 LIVE 標籤 */}
+                          {isCurrentlyLive && (
                             <span className="ml-auto text-[10px] font-semibold text-live flex items-center gap-1 group-data-[collapsible=icon]:hidden">
                               <span className="relative flex h-1.5 w-1.5">
                                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-live opacity-75" />
@@ -167,11 +189,10 @@ export function AppSidebar() {
             </SidebarGroupContent>
           </SidebarGroup>
         )}
-
       </SidebarContent>
 
       <SidebarFooter className="p-2">
-        <SettingsPanel collapsed={collapsed} />
+        <SettingsPanel collapsed={isSidebarCollapsed} />
       </SidebarFooter>
     </Sidebar>
   );

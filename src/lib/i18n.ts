@@ -1,847 +1,284 @@
-export const translations = {
-  en: {
-    // Shared/Common items
-    common: {
-      cancel: "Cancel",
-      add: "Add",
-      save: "Save",
-      delete: "Delete",
-      loadMore: "Load More",
-      loading: "Loading...",
-    },
-    // App-level translations
-    app: {
-      title: "Hololive Tracker",
-    },
-    // Navigation
-    nav: { 
-      home: "Home", 
-      members: "Members",
-      jellyfin: "Jellyfin", 
-      clips: "Clips", 
-      playlists: "Playlists", 
-      search: "Search",
-      settings: "Settings", 
-      favorites: "Favorites", 
-      multiView: "Multi-View", 
-      syncWatch: "Sync Watch", 
-      more: "More" 
-    },
-    // Home page
-    home: {
-      liveNow: "Live Now",
-      live: "Live",
-      upcomingStreams: "Upcoming Streams",
-      next5Days: "Next 5 days",
-      noLive: "No streams live right now.",
-      noUpcoming: "No upcoming streams scheduled.",
-      failedToLoad: "Failed to load streams.",
-    },
-    // Members page
-    members: {
-      title: "Members",
-      favorites: "My Favorites",
-      noFavorites: "No favorites yet. Click the ❤ on a member card!",
-      search: "Search members...",
-      allGenerations: "All Generations",
-      subscribers: "subscribers",
-      noFound: "No members found.",
-    },
-    // Clips/Clips page
-    clips: {
-      title: "Clips",
-      noClips: "No clips found.",
-    },
-    // Member Profile
-    profile: {
-      subscribers: "Subscribers",
-      videos: "Videos",
-      liveUpcoming: "Live / Upcoming",
-      pastStreams: "Past Streams",
-      clips: "Clips",
-      noStreams: "No streams found.",
-      noClips: "No clips found.",
-    },
-    // Settings page
-    settings: {
-      title: "System Settings",
-      tabUser: "User",
-      language: "Language",
-      username: "Username",
-      usernameDesc: "Used as your Sync Watch display name when creating or joining rooms.",
-      usernamePlaceholder: "Enter your username...",
-      avatar: "Avatar",
-      avatarDesc: "Upload a profile image for Sync Watch. It will be shown in the member list.",
-      avatarUpload: "Upload Avatar",
-      avatarError: "Failed to process this image. Please try another file.",
-      theme: "Theme",
-      darkMode: "Dark",
-      lightMode: "Light",
-      grapePurple: "Purple",
-      forestGreen: "Green",
-      playback: "Playback",
-      directYoutube: "Direct YouTube Link",
-      directYoutubeDesc: "Open videos in YouTube instead of cinema mode",
-      contentFilter: "Content Filter",
-      hideInactive: "Hide inactive channels",
-      hideInactiveDesc: "Hide channels that are no longer active",
-      hidePrivate: "Hide private/deleted videos",
-      hidePrivateDesc: "Filter out unavailable videos from lists",
-      clipLanguage: "Clip Language Filter",
-      clipLanguageDesc: "Select which languages to show clips for",
-      tabGeneral: "General",
-      tabFilter: "Content Filter",
-      tabBackup: "Backup",
-      exportConfig: "Export Config",
-      importConfig: "Import Config",
-      exportDesc: "Download all settings, favorites, and playlists as JSON",
-      importDesc: "Restore settings from a previously exported JSON file",
-      importSuccess: "Settings imported successfully!",
-      importError: "Invalid config file. Please try again.",
-    },
-    // Sidebar
-    sidebar: {
-      navigation: "Navigation",
-      liveNow: "Live Now",
-      favorites: "Favorites",
-      playlists: "Playlists",
-    },
-    // Playlists
-    playlists: {
-      create: "New Playlist",
-      namePlaceholder: "Playlist name...",
-      empty: "No playlists yet",
-      addTo: "Add to Playlist",
-      removeFrom: "Remove from Playlist",
-      videos: "videos",
-      rename: "Rename",
-      confirmCreate: "Create",
-      searchPlaceholder: "Search within this playlist...",
-      noMatches: "No videos match your current filter.",
-      sortLabel: "Sort",
-      sortNewest: "Newest added",
-      sortOldest: "Oldest added",
-      sortTitle: "Title",
-      sortChannel: "Channel",
-      selectionMode: "Select videos",
-      selectAllVisible: "Select visible",
-      clearSelection: "Done selecting",
-      selectedCount: "selected",
-      removeSelected: "Remove selected",
-      removeSelectedTitle: "Remove selected videos",
-      removeSelectedDesc: "The selected videos will be removed from this playlist.",
-      playFirst: "Play first",
-      deleteConfirmTitle: "Delete Playlist",
-      deleteConfirmDesc: "Are you sure you want to delete this playlist? This action cannot be undone.",
-    },
-    search: {
-      title: "Search",
-      placeholder: "Search streams, members, playlists...",
-      empty: "No matching results found.",
-      navigation: "Navigation",
-      quickLinks: "Quick Links",
-      live: "Live & Upcoming",
-      members: "Members",
-      playlists: "Playlists",
-      recent: "Recently Watched",
-      open: "Open search",
-    },
-    // Multi-View
-    multiView: {
-      title: "Multi-View",
-      empty: "No streams selected. Pick a live member above to add them.",
-      streams: "streams",
-      clearAll: "Clear All",
-      select: "Multi-View",
-      open: "Open Multi-View",
-      addWindow: "Add Window",
-      selectVideo: "Select Video",
-      clickToAdd: "Click to add a video",
-      layoutAuto: "Layout: Auto",
-      layoutGrid: "Layout: Grid",
-      saveConfig: "Save Layout",
-      copyConfigLink: "Copy Layout Link",
-      saved: "Layout saved",
-      linkCopied: "Layout link copied",
-      maxReached: "You can add up to 4 streams.",
-      muteTile: "Mute",
-      unmuteTile: "Unmute",
-      addFromFavorites: "Add from Favorites",
-      noFavoritesLive: "No favorite members are live right now.",
-      noFavorites: "No favorites yet. Add members from the Members page!",
-      pickLive: "Live now — click to add",
-      muteAll: "Mute All",
-      unmute: "Unmute All",
-      noLive: "No members are currently live.",
-    },
-    reminders: {
-      toggle: "Toggle reminder",
-      added: "Reminder added",
-      removed: "Reminder removed",
-      toastTitle: "A stream is starting soon",
-      browserTitle: "Holodexer reminder",
-    },
-    // Favorites page
-    favorites: {
-      title: "My Favorites",
-      live: "Live",
-      archives: "Archives",
-      clips: "Clips",
-      noFavorites: "No favorites yet. Go to Members and click ❤ on members you like!",
-      noLive: "No favorite members are live right now.",
-      noArchives: "No recent archives from favorites.",
-      noClips: "No clips found for favorites.",
-    },
-    // Sync Watch / Chat features
-    sync: {
-      syncWatch: "Sync Watch",
-      createRoom: "Create a Watch Room",
-      createDesc: "Create or join a watch room to sync playback with friends",
-      orJoin: "or join",
-      enterRoom: "Enter room ID (e.g. abcd-123)",
-      join: "Join",
-      roomNotFound: "Room not found. Make sure the host is currently in the room.",
-      roomValidationError: "Unable to verify this room right now. Please try again.",
-      invalidRoomId: "Invalid room ID. Room IDs only contain letters, numbers, and hyphens (e.g. abcd-123).",
-      room: "Room",
-      host: "HOST",
-      guest: "GUEST",
-      copyInvite: "Copy Invite",
-      leave: "Leave",
-      loadVideo: "Load Video",
-      pasteUrl: "Paste YouTube URL, video ID, or direct video URL...",
-      members: "Members",
-      chat: "Chat",
-      log: "Log",
-      queue: "Queue",
-      hostMode: "Host Mode",
-      freeControl: "Free Control",
-      hostOnlyVideo: "Only the Host can change the video",
-      hostWaiting: "Paste a video link above to start watching",
-      guestWaiting: "Waiting for host to load a video...",
-      syncing: "Syncing...",
-      noMessages: "No messages yet",
-      messagePlaceholder: "Message...",
-      nicknameTitle: "Set Nickname",
-      nicknameDesc: "Enter a nickname to join the watch room.",
-      nicknamePlaceholder: "Your nickname...",
-      joinButton: "Join Room",
-      queueEmpty: "Queue is empty",
-      queueAddHint: "Paste URL to add to queue",
-      upNext: "Up Next",
-      hostOnlyQueue: "Only the Host can manage the queue",
-      playNow: "Play now",
-      youIndicator: "(you)",
-      inviteCopied: "Invite link copied!",
-      openClips: "Open Clips",
-      clipsTitle: "Hololive Clips",
-      favoriteOnly: "Favorites Only",
-      selectClipToAdd: "Click a clip to add to sync watch",
-      selectLiveToAdd: "Click a live stream to add to sync watch",
-      selectArchiveToAdd: "Click an archive to add to sync watch",
-      noClipsFound: "No clips found",
-      noArchivesFound: "No archives found",
-      clipsLoading: "Loading clips...",
-      archivesLoading: "Loading archives...",
-      liveNow: "Live Now",
-      noLive: "No live members right now",
-      connecting: "Connecting",
-      connected: "Connected",
-      reconnecting: "Reconnecting",
-      connectionError: "Connection issue",
-      resyncNow: "Re-sync",
-      resyncRequested: "Sync request sent",
-      syncStatus: "Room status",
-      hostStatusHint: "You are the host. Your player state is the source of truth.",
-      guestStatusHint: "If playback drifts, you can request a fresh sync from the host.",
-      lastSynced: "Last sync",
-      syncThresholdLabel: "Drift threshold",
-      tapToUnmute: "Tap to unmute",
-      roomList: "Room List",
-      noRooms: "No rooms yet — be the first to create one!",
-    },
-    // Cinema mode
-    cinema: {
-      showChat: "Show Chat",
-    },
-    // Error pages
-    errors: {
-      notFound: "404",
-      pageNotFound: "Oops! Page not found",
-      returnHome: "Return to Home",
-      playlistNotFound: "Playlist not found.",
-    },
-    // Locale/Language names
-    locales: {
-      en: "English",
-      ja: "日本語",
-      "zh-TW": "中文",
-    },
-  },
-  "zh-TW": {
-    // 共用項目
-    common: {
-      cancel: "取消",
-      add: "加入",
-      save: "儲存",
-      delete: "刪除",
-      loadMore: "載入更多",
-      loading: "載入中...",
-    },
-    // 應用層級
-    app: {
-      title: "Hololive 追蹤器",
-    },
-    // 導航
-    nav: { 
-      home: "首頁", 
-      members: "成員", 
-      jellyfin: "動畫",
-      clips: "精華", 
-      playlists: "播放清單", 
-      search: "搜尋",
-      settings: "設定", 
-      favorites: "我的最愛", 
-      multiView: "多視窗", 
-      syncWatch: "同步觀看", 
-      more: "更多" 
-    },
-    // 首頁
-    home: {
-      liveNow: "直播中",
-      live: "直播",
-      upcomingStreams: "即將直播",
-      next5Days: "未來5天",
-      noLive: "目前沒有直播。",
-      noUpcoming: "沒有排定的直播。",
-      failedToLoad: "無法載入直播。",
-    },
-    // 成員頁面
-    members: {
-      title: "成員",
-      favorites: "我的最愛",
-      noFavorites: "尚無最愛。點擊成員卡片上的 ❤！",
-      search: "搜尋成員...",
-      allGenerations: "所有世代",
-      subscribers: "訂閱者",
-      noFound: "找不到成員。",
-    },
-    // 精華片段
-    clips: {
-      title: "精華",
-      noClips: "找不到精華片段。",
-    },
-    // 成員資料
-    profile: {
-      subscribers: "訂閱數",
-      videos: "影片數",
-      liveUpcoming: "直播中 / 即將直播",
-      pastStreams: "存檔",
-      clips: "精華",
-      noStreams: "找不到直播。",
-      noClips: "找不到精華片段。",
-    },
-    // 設定頁面
-    settings: {
-      title: "系統設定",
-      tabUser: "使用者",
-      language: "語言",
-      username: "使用者名稱",
-      usernameDesc: "建立或加入同步觀看房間時，會使用這個名稱作為你的顯示名稱。",
-      usernamePlaceholder: "輸入你的使用者名稱...",
-      avatar: "頭像",
-      avatarDesc: "上傳用於 Sync Watch 的個人頭像，會顯示在成員列表中。",
-      avatarUpload: "上傳頭像",
-      avatarError: "無法處理這張圖片，請換一個檔案重試。",
-      theme: "主題",
-      darkMode: "深色",
-      lightMode: "淺色",
-      grapePurple: "葡萄紫",
-      forestGreen: "森林綠",
-      playback: "播放設定",
-      directYoutube: "直接開啟 YouTube",
-      directYoutubeDesc: "在 YouTube 中開啟影片而非劇場模式",
-      contentFilter: "內容篩選",
-      hideInactive: "隱藏不活躍頻道",
-      hideInactiveDesc: "隱藏已不再活動的頻道",
-      hidePrivate: "隱藏私人/已刪除影片",
-      hidePrivateDesc: "從列表中過濾不可用的影片",
-      clipLanguage: "精華語言篩選",
-      clipLanguageDesc: "選擇要顯示的精華片段語言",
-      tabGeneral: "一般",
-      tabFilter: "內容篩選",
-      tabBackup: "備份",
-      exportConfig: "匯出設定",
-      importConfig: "匯入設定",
-      exportDesc: "將所有設定、我的最愛和播放列表下載為 JSON",
-      importDesc: "從先前匯出的 JSON 檔案還原設定",
-      importSuccess: "設定匯入成功！",
-      importError: "設定檔無效，請重試。",
-    },
-    // 側邊欄
-    sidebar: {
-      navigation: "導航",
-      liveNow: "直播中",
-      favorites: "我的最愛",
-      playlists: "播放列表",
-    },
-    // 播放清單
-    playlists: {
-      create: "新增播放列表",
-      namePlaceholder: "播放列表名稱...",
-      empty: "尚無播放列表",
-      addTo: "加入播放列表",
-      removeFrom: "從播放列表移除",
-      videos: "部影片",
-      rename: "重新命名",
-      confirmCreate: "建立",
-      searchPlaceholder: "搜尋這個播放清單中的影片...",
-      noMatches: "目前篩選條件下找不到影片。",
-      sortLabel: "排序",
-      sortNewest: "最近加入",
-      sortOldest: "最早加入",
-      sortTitle: "片名",
-      sortChannel: "頻道",
-      selectionMode: "批次選取",
-      selectAllVisible: "全選目前結果",
-      clearSelection: "結束選取",
-      selectedCount: "已選取",
-      removeSelected: "移除已選影片",
-      removeSelectedTitle: "移除已選影片",
-      removeSelectedDesc: "選取的影片將會從這個播放清單中移除。",
-      playFirst: "播放第一部",
-      deleteConfirmTitle: "刪除播放列表",
-      deleteConfirmDesc: "確定要刪除此播放列表嗎？此操作無法復原。",
-    },
-    search: {
-      title: "搜尋",
-      placeholder: "搜尋直播、成員、播放清單...",
-      empty: "找不到符合的結果。",
-      navigation: "導覽",
-      quickLinks: "快速前往",
-      live: "直播與待播",
-      members: "成員",
-      playlists: "播放清單",
-      recent: "最近觀看",
-      open: "開啟搜尋",
-    },
-    // 多視窗
-    multiView: {
-      title: "多視窗",
-      empty: "尚未選擇直播。點擊上方正在直播的成員即可加入。",
-      streams: "個直播",
-      clearAll: "清除全部",
-      select: "多視窗",
-      open: "開啟多視窗",
-      addWindow: "增加視窗",
-      selectVideo: "選擇影片",
-      clickToAdd: "點擊加入影片",
-      layoutAuto: "佈局：自動",
-      layoutGrid: "佈局：等分",
-      saveConfig: "保存配置",
-      copyConfigLink: "複製配置連結",
-      saved: "配置已保存",
-      linkCopied: "配置連結已複製",
-      maxReached: "最多只能加入 4 個視窗。",
-      muteTile: "靜音",
-      unmuteTile: "取消靜音",
-      addFromFavorites: "從我的最愛新增",
-      noFavoritesLive: "目前沒有最愛的成員正在直播。",
-      noFavorites: "尚無最愛。請先從成員頁面添加！",
-      pickLive: "直播中 — 點擊加入",
-      muteAll: "全部靜音",
-      unmute: "取消靜音",
-      noLive: "目前沒有成員正在直播。",
-    },
-    reminders: {
-      toggle: "切換提醒",
-      added: "已加入提醒",
-      removed: "已取消提醒",
-      toastTitle: "有直播即將開始",
-      browserTitle: "Holodexer 提醒",
-    },
-    // 我的最愛頁面
-    favorites: {
-      title: "我的最愛",
-      live: "直播中",
-      archives: "存檔",
-      clips: "精華",
-      noFavorites: "尚無最愛。前往成員頁面點擊 ❤ 加入最愛！",
-      noLive: "目前沒有最愛的成員正在直播。",
-      noArchives: "沒有最愛成員的近期存檔。",
-      noClips: "找不到最愛成員的精華片段。",
-    },
-    // 同步觀看 / 聊天功能
-    sync: {
-      syncWatch: "同步觀看",
-      createRoom: "建立觀看房間",
-      createDesc: "建立或加入觀看房間，與朋友同步播放",
-      orJoin: "或加入",
-      enterRoom: "輸入房間 ID（例如 abcd-123）",
-      join: "加入",
-      roomNotFound: "找不到此房間。請確認房主目前仍在線上房間內。",
-      roomValidationError: "目前無法驗證此房間，請稍後再試。",
-      invalidRoomId: "無效的房間 ID，只能包含英文字母、數字和連字號（例如 abcd-123）。",
-      room: "房間",
-      host: "房主",
-      guest: "訪客",
-      copyInvite: "複製邀請連結",
-      leave: "離開",
-      loadVideo: "載入影片",
-      pasteUrl: "貼上 YouTube 網址、影片 ID 或直連影片網址...",
-      members: "成員",
-      chat: "聊天",
-      log: "紀錄",
-      queue: "待播",
-      hostMode: "房主模式",
-      freeControl: "自由控制",
-      hostOnlyVideo: "只有房主可以更換影片",
-      hostWaiting: "在上方貼上影片連結開始觀看",
-      guestWaiting: "等待房主載入影片...",
-      syncing: "同步中...",
-      noMessages: "尚無訊息",
-      messagePlaceholder: "訊息...",
-      nicknameTitle: "設定暱稱",
-      nicknameDesc: "輸入暱稱加入觀看室。",
-      nicknamePlaceholder: "你的暱稱...",
-      joinButton: "加入聊天室",
-      queueEmpty: "隊列為空",
-      queueAddHint: "貼上 URL 以加入隊列",
-      upNext: "下一個",
-      hostOnlyQueue: "只有主持人可以管理隊列",
-      playNow: "立即播放",
-      youIndicator: "（你）",
-      inviteCopied: "邀請連結已複製！",
-      openClips: "開啟精華",
-      clipsTitle: "Hololive 精華片段",
-      favoriteOnly: "僅顯示我的最愛",
-      selectClipToAdd: "點擊精華以加入同步觀看",
-      selectLiveToAdd: "點擊直播以加入同步觀看",
-      selectArchiveToAdd: "點擊存檔以加入同步觀看",
-      noClipsFound: "找不到精華片段",
-      noArchivesFound: "找不到存檔影片",
-      clipsLoading: "正在加載精華...",
-      archivesLoading: "正在加載存檔...",
-      liveNow: "直播中",
-      noLive: "目前沒有直播中的成員",
-      connecting: "連線中",
-      connected: "已連線",
-      reconnecting: "重新連線中",
-      connectionError: "連線異常",
-      resyncNow: "重新同步",
-      resyncRequested: "已送出同步請求",
-      syncStatus: "房間狀態",
-      hostStatusHint: "你目前是房主，其他人的播放會以你的狀態為準。",
-      guestStatusHint: "如果播放不同步，可以手動向房主重新請求同步。",
-      lastSynced: "最近同步",
-      syncThresholdLabel: "誤差門檻",
-      tapToUnmute: "點一下開啟聲音",
-      roomList: "房間列表",
-      noRooms: "目前沒有房間，成為第一個主持人吧！",
-    },
-    // 劇場模式
-    cinema: {
-      showChat: "顯示聊天室",
-    },
-    // 錯誤頁面
-    errors: {
-      notFound: "404",
-      pageNotFound: "哎呀！找不到頁面",
-      returnHome: "返回首頁",
-      playlistNotFound: "找不到播放清單。",
-    },
-    // 語言名稱
-    locales: {
-      en: "English",
-      ja: "日本語",
-      "zh-TW": "繁體中文",
-    },
-  },
-  ja: {
-    // 共通項目
-    common: {
-      cancel: "キャンセル",
-      add: "追加",
-      save: "保存",
-      delete: "削除",
-      loadMore: "もっと見る",
-      loading: "読み込み中...",
-    },
-    // アプリレベル
-    app: {
-      title: "Hololive トラッカー",
-    },
-    // ナビゲーション
-    nav: { 
-      home: "ホーム", 
-      members: "メンバー", 
-      jellyfin: "アニメ",
-      clips: "切り抜き", 
-      playlists: "プレイリスト", 
-      search: "検索",
-      settings: "設定", 
-      favorites: "お気に入り", 
-      multiView: "マルチビュー", 
-      syncWatch: "同時視聴", 
-      more: "その他" 
-    },
-    // ホームページ
-    home: {
-      liveNow: "配信中",
-      live: "LIVE",
-      upcomingStreams: "配信予定",
-      next5Days: "5日以内",
-      noLive: "現在配信中のストリームはありません。",
-      noUpcoming: "予定されている配信はありません。",
-      failedToLoad: "ストリームの読み込みに失敗しました。",
-    },
-    // メンバーページ
-    members: {
-      title: "メンバー",
-      favorites: "お気に入り",
-      noFavorites: "お気に入りはまだありません。メンバーカードの❤をクリック！",
-      search: "メンバーを検索...",
-      allGenerations: "全世代",
-      subscribers: "登録者",
-      noFound: "メンバーが見つかりません。",
-    },
-    // 切り抜き
-    clips: {
-      title: "切り抜き",
-      noClips: "切り抜きが見つかりません。",
-    },
-    // メンバープロフィール
-    profile: {
-      subscribers: "登録者数",
-      videos: "動画数",
-      liveUpcoming: "配信中 / 配信予定",
-      pastStreams: "アーカイブ",
-      clips: "切り抜き",
-      noStreams: "配信が見つかりません。",
-      noClips: "切り抜きが見つかりません。",
-    },
-    // 設定ページ
-    settings: {
-      title: "システム設定",
-      tabUser: "ユーザー",
-      language: "言語",
-      username: "ユーザー名",
-      usernameDesc: "同時視聴でルームを作成または参加するときの表示名として使われます。",
-      usernamePlaceholder: "ユーザー名を入力...",
-      avatar: "アバター",
-      avatarDesc: "同時視聴用のプロフィール画像をアップロードできます。メンバー一覧に表示されます。",
-      avatarUpload: "アバターをアップロード",
-      avatarError: "この画像は処理できませんでした。別のファイルを試してください。",
-      theme: "テーマ",
-      darkMode: "ダーク",
-      lightMode: "ライト",
-      grapePurple: "パープル",
-      forestGreen: "グリーン",
-      playback: "再生設定",
-      directYoutube: "YouTube で直接開く",
-      directYoutubeDesc: "シネマモードではなくYouTubeで動画を開く",
-      contentFilter: "コンテンツフィルター",
-      hideInactive: "非アクティブチャンネルを非表示",
-      hideInactiveDesc: "活動していないチャンネルを非表示にする",
-      hidePrivate: "非公開/削除済み動画を非表示",
-      hidePrivateDesc: "利用不可の動画をリストから除外する",
-      clipLanguage: "切り抜き言語フィルター",
-      clipLanguageDesc: "表示する切り抜きの言語を選択",
-      tabGeneral: "一般",
-      tabFilter: "コンテンツフィルター",
-      tabBackup: "バックアップ",
-      exportConfig: "設定をエクスポート",
-      importConfig: "設定をインポート",
-      exportDesc: "すべての設定、お気に入り、プレイリストをJSONとしてダウンロード",
-      importDesc: "以前エクスポートしたJSONファイルから設定を復元",
-      importSuccess: "設定のインポートに成功しました！",
-      importError: "無効な設定ファイルです。もう一度お試しください。",
-    },
-    // サイドバー
-    sidebar: {
-      navigation: "ナビゲーション",
-      liveNow: "配信中",
-      favorites: "お気に入り",
-      playlists: "プレイリスト",
-    },
-    // プレイリスト
-    playlists: {
-      create: "新しいプレイリスト",
-      namePlaceholder: "プレイリスト名...",
-      empty: "プレイリストはまだありません",
-      addTo: "プレイリストに追加",
-      removeFrom: "プレイリストから削除",
-      videos: "本の動画",
-      rename: "名前を変更",
-      confirmCreate: "作成",
-      searchPlaceholder: "このプレイリスト内を検索...",
-      noMatches: "現在の条件に一致する動画がありません。",
-      sortLabel: "並び替え",
-      sortNewest: "新しく追加した順",
-      sortOldest: "古く追加した順",
-      sortTitle: "タイトル",
-      sortChannel: "チャンネル",
-      selectionMode: "一括選択",
-      selectAllVisible: "表示中をすべて選択",
-      clearSelection: "選択を終了",
-      selectedCount: "件を選択中",
-      removeSelected: "選択した動画を削除",
-      removeSelectedTitle: "選択した動画を削除",
-      removeSelectedDesc: "選択した動画をこのプレイリストから削除します。",
-      playFirst: "先頭を再生",
-      deleteConfirmTitle: "プレイリストを削除",
-      deleteConfirmDesc: "このプレイリストを削除しますか？この操作は元に戻せません。",
-    },
-    search: {
-      title: "検索",
-      placeholder: "配信、メンバー、プレイリストを検索...",
-      empty: "一致する結果が見つかりません。",
-      navigation: "ナビゲーション",
-      quickLinks: "クイックリンク",
-      live: "配信中・配信予定",
-      members: "メンバー",
-      playlists: "プレイリスト",
-      recent: "最近見た動画",
-      open: "検索を開く",
-    },
-    // マルチビュー
-    multiView: {
-      title: "マルチビュー",
-      empty: "配信が選択されていません。上のライブ中のメンバーをクリックして追加してください。",
-      streams: "配信",
-      clearAll: "すべてクリア",
-      select: "マルチビュー",
-      open: "マルチビューを開く",
-      addWindow: "ウィンドウ追加",
-      selectVideo: "動画選択",
-      clickToAdd: "クリックして動画を追加",
-      layoutAuto: "レイアウト: 自動",
-      layoutGrid: "レイアウト: グリッド",
-      saveConfig: "レイアウト保存",
-      copyConfigLink: "レイアウトリンクをコピー",
-      saved: "レイアウトを保存しました",
-      linkCopied: "レイアウトリンクをコピーしました",
-      maxReached: "追加できる配信は最大 4 件です。",
-      muteTile: "ミュート",
-      unmuteTile: "ミュート解除",
-      addFromFavorites: "お気に入りから追加",
-      noFavoritesLive: "お気に入りのメンバーは現在配信中ではありません。",
-      noFavorites: "お気に入りがまだありません。メンバーページから追加してください！",
-      pickLive: "配信中 — クリックで追加",
-      muteAll: "全てミュート",
-      unmute: "ミュート解除",
-      noLive: "現在配信中のメンバーはいません。",
-    },
-    reminders: {
-      toggle: "リマインダー切替",
-      added: "リマインダーを追加しました",
-      removed: "リマインダーを解除しました",
-      toastTitle: "まもなく配信が始まります",
-      browserTitle: "Holodexer リマインダー",
-    },
-    // お気に入りページ
-    favorites: {
-      title: "お気に入り",
-      live: "配信",
-      archives: "アーカイブ",
-      clips: "切り抜き",
-      noFavorites: "お気に入りはまだありません。メンバーページで❤をクリックしてください！",
-      noLive: "お気に入りのメンバーは現在配信中ではありません。",
-      noArchives: "お気に入りメンバーの最近のアーカイブはありません。",
-      noClips: "お気に入りメンバーの切り抜きが見つかりません。",
-    },
-    // 同時視聴 / チャット機能
-    sync: {
-      syncWatch: "同時視聴",
-      createRoom: "視聴ルームを作成",
-      createDesc: "視聴ルームを作成または参加して、友達と再生を同期",
-      orJoin: "または参加",
-      enterRoom: "ルームIDを入力",
-      join: "参加",
-      roomNotFound: "ルームが見つかりません。ホストが現在そのルームにいるか確認してください。",
-      roomValidationError: "現在このルームを確認できません。もう一度お試しください。",
-      invalidRoomId: "無効なルーム ID です。英数字とハイフンのみ使用できます（例: abcd-123）。",
-      room: "ルーム",
-      host: "ホスト",
-      guest: "ゲスト",
-      copyInvite: "招待リンクをコピー",
-      leave: "退出",
-      loadVideo: "動画を読み込む",
-      pasteUrl: "YouTube URL、動画ID、または直接動画URLを貼り付け...",
-      members: "メンバー",
-      chat: "チャット",
-      log: "ログ",
-      queue: "キュー",
-      hostMode: "ホストモード",
-      freeControl: "フリー操作",
-      hostOnlyVideo: "ホストのみが動画を変更できます",
-      hostWaiting: "上に動画リンクを貼り付けて視聴開始",
-      guestWaiting: "ホストが動画を読み込むのを待っています...",
-      syncing: "同期中...",
-      noMessages: "メッセージがまだありません",
-      messagePlaceholder: "メッセージ...",
-      nicknameTitle: "ニックネームを設定",
-      nicknameDesc: "視聴ルームに参加するニックネームを入力してください。",
-      nicknamePlaceholder: "あなたのニックネーム...",
-      joinButton: "ルームに参加",
-      queueEmpty: "キューが空です",
-      queueAddHint: "URLを貼り付けてキューに追加",
-      upNext: "次",
-      hostOnlyQueue: "ホストのみがキューを管理できます",
-      playNow: "今すぐ再生",
-      youIndicator: "（あなた）",
-      inviteCopied: "招待リンクがコピーされました！",
-      openClips: "切り抜きを開く",
-      clipsTitle: "Hololive 切り抜き",
-      favoriteOnly: "お気に入りのみ",
-      selectClipToAdd: "切り抜きをクリックして同時視聴に追加",
-      selectLiveToAdd: "配信をクリックして同時視聴に追加",
-      selectArchiveToAdd: "アーカイブをクリックして同時視聴に追加",
-      noClipsFound: "切り抜きが見つかりません",
-      noArchivesFound: "アーカイブが見つかりません",
-      clipsLoading: "切り抜きを読み込み中...",
-      archivesLoading: "アーカイブを読み込み中...",
-      liveNow: "配信中",
-      noLive: "現在配信中のメンバーはいません",
-      connecting: "接続中",
-      connected: "接続済み",
-      reconnecting: "再接続中",
-      connectionError: "接続エラー",
-      resyncNow: "再同期",
-      resyncRequested: "同期リクエストを送信しました",
-      syncStatus: "ルーム状態",
-      hostStatusHint: "あなたはホストです。再生状態はあなたのプレイヤーが基準になります。",
-      guestStatusHint: "ズレたときはホストへ再同期をリクエストできます。",
-      lastSynced: "最終同期",
-      syncThresholdLabel: "許容ズレ",
-      tapToUnmute: "タップしてミュート解除",
-      roomList: "ルーム一覧",
-      noRooms: "現在ルームがありません。最初のホストになりましょう！",
-    },
-    // シネマモード
-    cinema: {
-      showChat: "チャットを表示",
-    },
-    // エラーページ
-    errors: {
-      notFound: "404",
-      pageNotFound: "申し訳ありません！ページが見つかりません",
-      returnHome: "ホームに戻る",
-      playlistNotFound: "プレイリストが見つかりません。",
-    },
-    // 言語名
-    locales: {
-      en: "English",
-      ja: "日本語",
-      "zh-TW": "繁体字中国語",
-    },
-  },
-} as const;
+export type Locale = "en" | "zh-TW" | "ja";
 
-export type Locale = keyof typeof translations;
+export interface TranslationKeys {
+  app: {
+    title: string;
+  };
+  cinema: {
+    showChat: string;
+  };
+  clips: {
+    title: string;
+    noClips: string;
+  };
+  common: {
+    cancel: string;
+    add: string;
+    save: string;
+    delete: string;
+    loadMore: string;
+    loading: string;
+  };
+  errors: {
+    notFound: string;
+    pageNotFound: string;
+    returnHome: string;
+    playlistNotFound: string;
+  };
+  favorites: {
+    title: string;
+    live: string;
+    archives: string;
+    clips: string;
+    noFavorites: string;
+    noLive: string;
+    noArchives: string;
+    noClips: string;
+  };
+  home: {
+    liveNow: string;
+    live: string;
+    upcomingStreams: string;
+    next5Days: string;
+    noLive: string;
+    noUpcoming: string;
+    failedToLoad: string;
+  };
+  locales: {
+    en: string;
+    ja: string;
+    "zh-TW": string;
+  };
+  members: {
+    title: string;
+    favorites: string;
+    noFavorites: string;
+    search: string;
+    allGenerations: string;
+    subscribers: string;
+    noFound: string;
+  };
+  multiView: {
+    title: string;
+    empty: string;
+    streams: string;
+    clearAll: string;
+    select: string;
+    open: string;
+    addWindow: string;
+    selectVideo: string;
+    clickToAdd: string;
+    layoutAuto: string;
+    layoutGrid: string;
+    saveConfig: string;
+    copyConfigLink: string;
+    saved: string;
+    linkCopied: string;
+    maxReached: string;
+    muteTile: string;
+    unmuteTile: string;
+    addFromFavorites: string;
+    noFavoritesLive: string;
+    noFavorites: string;
+    pickLive: string;
+    muteAll: string;
+    unmute: string;
+    noLive: string;
+  };
+  nav: {
+    home: string;
+    members: string;
+    jellyfin: string;
+    clips: string;
+    playlists: string;
+    search: string;
+    settings: string;
+    favorites: string;
+    multiView: string;
+    syncWatch: string;
+    more: string;
+  };
+  playlists: {
+    create: string;
+    namePlaceholder: string;
+    empty: string;
+    addTo: string;
+    removeFrom: string;
+    videos: string;
+    rename: string;
+    confirmCreate: string;
+    searchPlaceholder: string;
+    noMatches: string;
+    sortLabel: string;
+    sortNewest: string;
+    sortOldest: string;
+    sortTitle: string;
+    sortChannel: string;
+    selectionMode: string;
+    selectAllVisible: string;
+    clearSelection: string;
+    selectedCount: string;
+    removeSelected: string;
+    removeSelectedTitle: string;
+    removeSelectedDesc: string;
+    playFirst: string;
+    deleteConfirmTitle: string;
+    deleteConfirmDesc: string;
+  };
+  profile: {
+    subscribers: string;
+    videos: string;
+    liveUpcoming: string;
+    pastStreams: string;
+    clips: string;
+    noStreams: string;
+    noClips: string;
+  };
+  reminders: {
+    toggle: string;
+    added: string;
+    removed: string;
+    toastTitle: string;
+    browserTitle: string;
+  };
+  search: {
+    title: string;
+    placeholder: string;
+    empty: string;
+    navigation: string;
+    quickLinks: string;
+    live: string;
+    members: string;
+    playlists: string;
+    recent: string;
+    open: string;
+  };
+  settings: {
+    title: string;
+    tabUser: string;
+    language: string;
+    username: string;
+    usernameDesc: string;
+    usernamePlaceholder: string;
+    avatar: string;
+    avatarDesc: string;
+    avatarUpload: string;
+    avatarError: string;
+    theme: string;
+    darkMode: string;
+    lightMode: string;
+    grapePurple: string;
+    forestGreen: string;
+    playback: string;
+    directYoutube: string;
+    directYoutubeDesc: string;
+    contentFilter: string;
+    hideInactive: string;
+    hideInactiveDesc: string;
+    hidePrivate: string;
+    hidePrivateDesc: string;
+    clipLanguage: string;
+    clipLanguageDesc: string;
+    tabGeneral: string;
+    tabFilter: string;
+    tabBackup: string;
+    exportConfig: string;
+    importConfig: string;
+    exportDesc: string;
+    importDesc: string;
+    importSuccess: string;
+    importError: string;
+  };
+  sidebar: {
+    navigation: string;
+    liveNow: string;
+    favorites: string;
+    playlists: string;
+  };
+  sync: {
+    syncWatch: string;
+    createRoom: string;
+    createDesc: string;
+    orJoin: string;
+    enterRoom: string;
+    join: string;
+    roomNotFound: string;
+    roomValidationError: string;
+    invalidRoomId: string;
+    room: string;
+    host: string;
+    guest: string;
+    copyInvite: string;
+    leave: string;
+    loadVideo: string;
+    pasteUrl: string;
+    members: string;
+    chat: string;
+    log: string;
+    queue: string;
+    hostMode: string;
+    freeControl: string;
+    hostOnlyVideo: string;
+    hostWaiting: string;
+    guestWaiting: string;
+    syncing: string;
+    noMessages: string;
+    messagePlaceholder: string;
+    nicknameTitle: string;
+    nicknameDesc: string;
+    nicknamePlaceholder: string;
+    joinButton: string;
+    queueEmpty: string;
+    queueAddHint: string;
+    upNext: string;
+    hostOnlyQueue: string;
+    playNow: string;
+    youIndicator: string;
+    inviteCopied: string;
+    openClips: string;
+    clipsTitle: string;
+    favoriteOnly: string;
+    selectClipToAdd: string;
+    selectLiveToAdd: string;
+    selectArchiveToAdd: string;
+    noClipsFound: string;
+    noArchivesFound: string;
+    clipsLoading: string;
+    archivesLoading: string;
+    liveNow: string;
+    noLive: string;
+    connecting: string;
+    connected: string;
+    reconnecting: string;
+    connectionError: string;
+    resyncNow: string;
+    resyncRequested: string;
+    syncStatus: string;
+    hostStatusHint: string;
+    guestStatusHint: string;
+    lastSynced: string;
+    syncThresholdLabel: string;
+    tapToUnmute: string;
+    roomList: string;
+    noRooms: string;
+  };
+}
 
-type DeepString<T> = {
-  [K in keyof T]: T[K] extends string ? string : DeepString<T[K]>;
-};
+export const namespaces = [
+  "common", "app", "nav", "home", "members", "clips", "profile", 
+  "settings", "sidebar", "playlists", "search", "multiView", 
+  "reminders", "favorites", "sync", "cinema", "errors", "locales"
+];
 
-export type TranslationKeys = DeepString<typeof translations["en"]>;
+export async function fetchTranslations(locale: Locale): Promise<TranslationKeys> {
+  try {
+    const req = await fetch(`/locales/${locale}.json`);
+    if (req.ok) {
+      return await req.json() as TranslationKeys;
+    }
+  } catch (e) {
+    console.error(`Failed to load translations for locale ${locale}`, e);
+  }
+
+  return {} as TranslationKeys;
+}

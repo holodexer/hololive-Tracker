@@ -86,23 +86,23 @@ export function showValidationError(message: string): void {
 /**
  * Success notification helper
  */
-export function showSuccess(message: string): void {
-  toast.success(message);
+export function showSuccess(message: string, options?: any): void {
+  toast.success(message, options);
 }
 
 /**
  * Info notification helper
  */
-export function showInfo(message: string): void {
-  toast.message(message);
+export function showInfo(message: string, options?: any): void {
+  toast.message(message, options);
 }
 
 /**
  * Loading notification helper
  * Returns a function to dismiss the notification
  */
-export function showLoading(message: string): () => void {
-  const toastId = toast.loading(message);
+export function showLoading(message: string, options?: any): () => void {
+  const toastId = toast.loading(message, options);
   return () => toast.dismiss(toastId);
 }
 
