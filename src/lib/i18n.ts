@@ -272,7 +272,10 @@ export const namespaces = [
 
 export async function fetchTranslations(locale: Locale): Promise<TranslationKeys> {
   try {
-    const req = await fetch(`/locales/${locale}.json`);
+    // 使用 Vite 提供的 BASE_URL 以正確對應 GitHub Pages 的子路徑部署
+    // 若 base 為 '/hololive-Tracker/'，則 fetch 路徑為 '/hololive-Tracker/locales/en.json'
+    const base = import.meta.env.BASE_URL ?? '/';
+    const req = await fetch(`${base}locales/${locale}.json`);
     if (req.ok) {
       return await req.json() as TranslationKeys;
     }
