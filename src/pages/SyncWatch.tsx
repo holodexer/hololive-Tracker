@@ -6,6 +6,7 @@
  */
 
 import { useState, useRef, useCallback, useEffect, useMemo } from "react";
+import Hls from "hls.js";
 import { useSearchParams } from "react-router-dom";
 import { Radio, Copy, Plus, Users, RefreshCw, ArrowLeft, Wifi, WifiOff, RotateCcw, VolumeX, Play } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -100,9 +101,11 @@ export default function SyncWatch() {
   const [showClips, setShowClips] = useState(false);
   const [clipsActiveTab, setClipsActiveTab] = useState<"live" | "archives" | "clips" | "playlists" | "jellyfin">("live");
   const [directPausedFrame, setDirectPausedFrame] = useState<string | null>(null);
+  const [playbackError, setPlaybackError] = useState<string | null>(null);
 
   const playerRef = useRef<any>(null);
   const directVideoRef = useRef<HTMLVideoElement | null>(null);
+  const hlsRef = useRef<Hls | null>(null);
   const playerContainerRef = useRef<HTMLDivElement>(null);
   const playerAreaRef = useRef<HTMLDivElement>(null);
   const suppressSyncRef = useRef(false);
@@ -342,21 +345,96 @@ export default function SyncWatch() {
     }
   }, [currentMedia]);
 
-  // Imperatively manage direct video src to avoid React unmount/remount conflicts.
+  // --- 事件處理與副作用：直接影音/HLS 播放器初始化 ---
+  // 自動將 Jellyfin 的 URL 替換成 master.m3u8，並使用 hls.js 接管播放，完美解決轉碼崩潰問題
   useEffect(() => {
     const el = directVideoRef.current;
     if (!el) return;
-    jellyfinTranscodeAttemptedRef.current = null; // reset retry on video change
+    jellyfinTranscodeAttemptedRef.current = null;
     setDirectPausedFrame(null);
+
+    // 清理先前的 HLS 實例以釋放記憶體
+    if (hlsRef.current) {
+      hlsRef.current.destroy();
+      hlsRef.current = null;
+    }
+
     if (currentMedia?.source === "direct") {
-      el.src = currentMedia.value;
-      el.load();
-      el.play().catch(() => { /* autoplay restriction is fine */ });
+      let finalUrl = currentMedia.value;
+      
+      // 針對 Safari 黑魔法的最終解：
+      // 由於 Chrome 環境下 HLS 完美運作，但 Safari 會鎖定 234p 以及遭受 10-bit Washed Out 色偏。
+      // 我們專門針對 Safari 放棄使用切片 HLS，改用 Jellyfin 的「即時漸進式 MP4 轉檔 (Progressive MP4)」接口！
+      const isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
+      
+      const jellyfinMatch = finalUrl.match(/^(https?:\/\/.+?)\/(?:Videos|Items)\/([^/?]+)/i);
+      const apiKeyMatch = finalUrl.match(/[?&]api_key=([^&]+)/);
+      
+      if (jellyfinMatch && apiKeyMatch && !currentMedia.value.includes('youtube')) {
+        const [, base, itemId] = jellyfinMatch;
+        const apiKey = apiKeyMatch[1];
+        
+        if (isSafari) {
+          // Safari 專屬：捨棄 m3u8，請求 Jellyfin 動態吐出一段不斷串流的 mp4 代替
+          // 此舉完全避開 Apple HLS 的任何缺點，色彩映射也能回歸正常的 MP4 SDR 標準
+          finalUrl = `${base}/Videos/${itemId}/stream.mp4?api_key=${apiKey}&Container=mp4&VideoCodec=h264,hevc,h265&AudioCodec=aac,mp3,ac3&VideoBitrate=139616000&AudioBitrate=384000`;
+        } else {
+          // Chrome/Edge/Firefox 使用正常的 HLS 並且強制 140Mbps
+          finalUrl = `${base}/Videos/${itemId}/master.m3u8?api_key=${apiKey}&MediaSourceId=${itemId}&VideoCodec=h264&AudioCodec=aac,mp3&VideoBitrate=139616000&AudioBitrate=384000&MaxFramerate=60`;
+        }
+      }
+
+      const isM3u8 = finalUrl.toLowerCase().includes('.m3u8');
+
+      if (isM3u8 && !isSafari && Hls.isSupported()) {
+        // Chrome 等非 Safari 瀏覽器使用 hls.js 解析 M3U8
+        const hls = new Hls({
+          maxBufferLength: 30, 
+        });
+        hlsRef.current = hls;
+        
+        hls.loadSource(finalUrl);
+        hls.attachMedia(el);
+        
+        hls.on(Hls.Events.MANIFEST_PARSED, () => {
+          // 強制鎖定在最高畫質，防止載入初期網路抖動導致畫質降低
+          hls.currentLevel = hls.levels.length - 1;
+          el.play().catch(() => {});
+        });
+        
+        hls.on(Hls.Events.ERROR, (_event, data) => {
+          if (data.fatal) {
+            switch (data.type) {
+              case Hls.ErrorTypes.NETWORK_ERROR:
+                hls.startLoad();
+                break;
+              case Hls.ErrorTypes.MEDIA_ERROR:
+                hls.recoverMediaError();
+                break;
+              default:
+                hls.destroy();
+                break;
+            }
+          }
+        });
+      } else {
+        // Safari (stream.mp4) 或純直接 MP4 連結，由原生 <video> 標籤無損直出
+        el.src = finalUrl;
+        el.load();
+        el.play().catch(() => {});
+      }
     } else {
       el.pause();
       el.removeAttribute("src");
-      el.load(); // releases the media resource
+      el.load();
     }
+    
+    return () => {
+      if (hlsRef.current) {
+        hlsRef.current.destroy();
+        hlsRef.current = null;
+      }
+    };
   }, [currentMedia]);
 
   // --- 事件處理與副作用：YouTube 播放器初始化 ---

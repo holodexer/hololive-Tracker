@@ -477,7 +477,7 @@ export function ClipsOverlay({
     const playableTypes = ["Movie", "Episode", "Video", "Audio", "MusicVideo"];
     if (playableTypes.includes(item.Type)) {
       const base = jellyfinUrl.replace(/\/+$/, "");
-      const streamUrl = `${base}/Videos/${item.Id}/stream?static=true&api_key=${jellyfinToken}`;
+      const streamUrl = `${base}/Videos/${item.Id}/master.m3u8?api_key=${jellyfinToken}&MediaSourceId=${item.Id}&VideoCodec=h264&AudioCodec=aac,mp3&VideoBitrate=139616000&AudioBitrate=384000&MaxFramerate=60`;
       onSelectClip(streamUrl, item.Name);
       return;
     }
@@ -487,7 +487,7 @@ export function ClipsOverlay({
   const handleJellyfinQueueItem = (item: JellyfinItem) => {
     if (!onAddToQueue || !jellyfinUrl || !jellyfinToken) return;
     const base = jellyfinUrl.replace(/\/+$/, "");
-    onAddToQueue(`${base}/Videos/${item.Id}/stream?static=true&api_key=${jellyfinToken}`, item.Name);
+    onAddToQueue(`${base}/Videos/${item.Id}/master.m3u8?api_key=${jellyfinToken}&MediaSourceId=${item.Id}&VideoCodec=h264&AudioCodec=aac,mp3&VideoBitrate=139616000&AudioBitrate=384000&MaxFramerate=60`, item.Name);
   };
 
   const handleJellyfinSelectLib = (lib: JellyfinItem) => {
