@@ -102,6 +102,8 @@ export default function SyncWatch() {
   const [clipsActiveTab, setClipsActiveTab] = useState<"live" | "archives" | "clips" | "playlists" | "jellyfin">("live");
   const [directPausedFrame, setDirectPausedFrame] = useState<string | null>(null);
   const [playbackError, setPlaybackError] = useState<string | null>(null);
+  const [browserUnsupported, setBrowserUnsupported] = useState(false);
+  const hlsFallbackUrlRef = useRef<string | null>(null);
 
   const playerRef = useRef<any>(null);
   const directVideoRef = useRef<HTMLVideoElement | null>(null);
@@ -113,7 +115,7 @@ export default function SyncWatch() {
   const guestControlEnabledRef = useRef(false);
   const currentVideoIdRef = useRef<string | null>(null);
   const videoChangeLockRef = useRef(false);
-  const playNextRef = useRef<() => void>(() => {});
+  const playNextRef = useRef<() => void>(() => { });
   const lastGuestApplyAtRef = useRef(0);
   const guestAutoplayKickDoneForRef = useRef<string | null>(null);
   const jellyfinTranscodeAttemptedRef = useRef<string | null>(null);
@@ -359,49 +361,62 @@ export default function SyncWatch() {
       hlsRef.current = null;
     }
 
+    // 每次切換影片時重設錯誤狀態
+    setPlaybackError(null);
+
     if (currentMedia?.source === "direct") {
       let finalUrl = currentMedia.value;
-      
+
       // 針對 Safari 黑魔法的最終解：
       // 由於 Chrome 環境下 HLS 完美運作，但 Safari 會鎖定 234p 以及遭受 10-bit Washed Out 色偏。
       // 我們專門針對 Safari 放棄使用切片 HLS，改用 Jellyfin 的「即時漸進式 MP4 轉檔 (Progressive MP4)」接口！
       const isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
-      
+
       const jellyfinMatch = finalUrl.match(/^(https?:\/\/.+?)\/(?:Videos|Items)\/([^/?]+)/i);
       const apiKeyMatch = finalUrl.match(/[?&]api_key=([^&]+)/);
-      
-      if (jellyfinMatch && apiKeyMatch && !currentMedia.value.includes('youtube')) {
+      // /Download 端點是直接輸出原始檔案，瀏覽器通常可以直接播放
+      // 不應將其轉換為串流 URL，否則若轉碼失敗反而無法播放
+      const isDownloadEndpoint = /\/(?:Videos|Items)\/[^/]+\/Download(\?|$)/i.test(finalUrl);
+
+      if (jellyfinMatch && apiKeyMatch && !currentMedia.value.includes('youtube') && !isDownloadEndpoint) {
         const [, base, itemId] = jellyfinMatch;
         const apiKey = apiKeyMatch[1];
-        
-        if (isSafari) {
-          // Safari 專屬：捨棄 m3u8，請求 Jellyfin 動態吐出一段不斷串流的 mp4 代替
-          // 此舉完全避開 Apple HLS 的任何缺點，色彩映射也能回歸正常的 MP4 SDR 標準
-          finalUrl = `${base}/Videos/${itemId}/stream.mp4?api_key=${apiKey}&Container=mp4&VideoCodec=h264,hevc,h265&AudioCodec=aac,mp3,ac3&VideoBitrate=139616000&AudioBitrate=384000`;
-        } else {
-          // Chrome/Edge/Firefox 使用正常的 HLS 並且強制 140Mbps
-          finalUrl = `${base}/Videos/${itemId}/master.m3u8?api_key=${apiKey}&MediaSourceId=${itemId}&VideoCodec=h264&AudioCodec=aac,mp3&VideoBitrate=139616000&AudioBitrate=384000&MaxFramerate=60`;
-        }
+        // 所有瀏覽器（包含 Safari）統一使用 master.m3u8：
+        //   - Chrome/Firefox：由 hls.js 接管
+        //   - Safari：以原生 HLS 播放（Safari 原生支援 HLS！）
+        // 若原生 HLS 失敗（code 4），error handler 會自動降級至 stream.mp4
+        finalUrl = `${base}/Videos/${itemId}/master.m3u8?api_key=${apiKey}&MediaSourceId=${itemId}&VideoCodec=h264&AudioCodec=aac,mp3&VideoBitrate=139616000&AudioBitrate=384000&MaxFramerate=60`;
       }
 
       const isM3u8 = finalUrl.toLowerCase().includes('.m3u8');
 
       if (isM3u8 && !isSafari && Hls.isSupported()) {
         // Chrome 等非 Safari 瀏覽器使用 hls.js 解析 M3U8
+        // 預先記住對應的 MP4 fallback URL，供 HLS 不可恢復錯誤時切換
+        const jellyfinMatchFallback = finalUrl.match(/^(https?:\/\/.+?)\/(?:Videos|Items)\/([^/?]+)/i);
+        const apiKeyMatchFallback = finalUrl.match(/[?&]api_key=([^&]+)/);
+        if (jellyfinMatchFallback && apiKeyMatchFallback) {
+          const [, baseFb, itemIdFb] = jellyfinMatchFallback;
+          const apiKeyFb = apiKeyMatchFallback[1];
+          hlsFallbackUrlRef.current = `${baseFb}/Videos/${itemIdFb}/stream.mp4?api_key=${apiKeyFb}&Container=mp4&VideoCodec=h264&AudioCodec=aac,mp3&VideoBitrate=8000000`;
+        } else {
+          hlsFallbackUrlRef.current = null;
+        }
+
         const hls = new Hls({
-          maxBufferLength: 30, 
+          maxBufferLength: 30,
         });
         hlsRef.current = hls;
-        
+
         hls.loadSource(finalUrl);
         hls.attachMedia(el);
-        
+
         hls.on(Hls.Events.MANIFEST_PARSED, () => {
           // 強制鎖定在最高畫質，防止載入初期網路抖動導致畫質降低
           hls.currentLevel = hls.levels.length - 1;
-          el.play().catch(() => {});
+          el.play().catch(() => { });
         });
-        
+
         hls.on(Hls.Events.ERROR, (_event, data) => {
           if (data.fatal) {
             switch (data.type) {
@@ -412,23 +427,41 @@ export default function SyncWatch() {
                 hls.recoverMediaError();
                 break;
               default:
+                // 不可恢復的錯誤 → 嘗試降級到 MP4
                 hls.destroy();
+                hlsRef.current = null;
+                if (hlsFallbackUrlRef.current) {
+                  el.src = hlsFallbackUrlRef.current;
+                  el.load();
+                  el.play().catch(() => { });
+                  hlsFallbackUrlRef.current = null;
+                } else {
+                  setPlaybackError('unsupported');
+                }
                 break;
             }
           }
         });
+      } else if (isM3u8 && !isSafari && !Hls.isSupported()) {
+        // 瀏覽器既不是 Safari 也不支援 HLS.js → 直接顯示不支援提示
+        setBrowserUnsupported(true);
+        setPlaybackError('unsupported');
       } else {
-        // Safari (stream.mp4) 或純直接 MP4 連結，由原生 <video> 標籤無損直出
+        // 此分支涵蓋以下情況：
+        // 1. Safari + m3u8：Safari 原生 HLS 引擎直接播放（不透過 hls.js）
+        //    若 HLS 失敗（code 4），error handler 會降級至 stream.mp4
+        // 2. 所有瀏覽器 + 非 m3u8（MP4、Download 直連等）：原生 <video> 直出
+        setBrowserUnsupported(false);
         el.src = finalUrl;
         el.load();
-        el.play().catch(() => {});
+        el.play().catch(() => { });
       }
     } else {
       el.pause();
       el.removeAttribute("src");
       el.load();
     }
-    
+
     return () => {
       if (hlsRef.current) {
         hlsRef.current.destroy();
@@ -819,23 +852,45 @@ export default function SyncWatch() {
     playNextRef.current();
   }, []);
 
-  // Fallback: if a Jellyfin static stream fails (incompatible codec/container),
-  // retry once with server-side transcoding to H264/AAC MP4.
+  // 錯誤處理策略（三階段降級）：
+  // 第一階段：HLS (m3u8) 或 Safari 的 stream.mp4 是我們的主要嘗試。
+  // 第二階段：格式確認不支援 (code 4) 時，對 Jellyfin 切換至 MP4 降級。
+  // 第三階段：MP4 降級仍失敗，或非 Jellyfin 連結 → 顯示不支援提示。
+  //
+  // ⚠️ 核心守衛：任何不是 MEDIA_ERR_SRC_NOT_SUPPORTED (code 4) 的錯誤
+  //    都屬於暫時性問題（網路、解碼、中止、未知），一律靜默忽略。
+  //    Safari 播 MP4 時尤其容易遭到 code 0/2/3 誤觸，絕對不可在這裡顯示不支援提示。
   const handleDirectVideoError = useCallback(() => {
     const el = directVideoRef.current;
     if (!el) return;
     const url = el.src;
-    if (!url || !url.includes("/Videos/") || !url.includes("static=true")) return;
-    if (jellyfinTranscodeAttemptedRef.current === url) return; // already retried
-    jellyfinTranscodeAttemptedRef.current = url;
-    const match = url.match(/^(https?:\/\/.+?)\/Videos\/([^/]+)\/stream/);
+    if (!url) return;
+
+    const errorCode = el.error?.code ?? 0;
+
+    // 只有 code 4 才是真正的瀏覽器格式不支援；其他全部靜默
+    if (errorCode !== MediaError.MEDIA_ERR_SRC_NOT_SUPPORTED) {
+      return;
+    }
+
+    // 以下確定是 code 4 — 瀏覽器無法處理此格式
+    const jellyfinMatch = url.match(/^(https?:\/\/.+?)\/(?:Videos|Items)\/([^/?]+)/i);
     const apiKeyMatch = url.match(/[?&]api_key=([^&]+)/);
-    if (!match || !apiKeyMatch) return;
-    const [, base, itemId] = match;
-    const apiKey = apiKeyMatch[1];
-    el.src = `${base}/Videos/${itemId}/stream?api_key=${apiKey}&Container=mp4&VideoCodec=h264&AudioCodec=aac,mp3`;
-    el.load();
-    el.play().catch(() => {});
+    const isAlreadyMp4Fallback = url.includes('stream.mp4') && url.includes('Container=mp4');
+
+    if (jellyfinMatch && apiKeyMatch && !isAlreadyMp4Fallback) {
+      // 非 MP4 Jellyfin URL（例如 m3u8）格式不支援 → 切換至漸進式 MP4 作為保底
+      jellyfinTranscodeAttemptedRef.current = url;
+      const [, base, itemId] = jellyfinMatch;
+      const apiKey = apiKeyMatch[1];
+      el.src = `${base}/Videos/${itemId}/stream.mp4?api_key=${apiKey}&Container=mp4&VideoCodec=h264&AudioCodec=aac,mp3&VideoBitrate=8000000`;
+      el.load();
+      el.play().catch(() => { });
+      return;
+    }
+
+    // MP4 降級 URL 也無法播放，或非 Jellyfin 連結 → 顯示對應錯誤提示
+    setPlaybackError(isAlreadyMp4Fallback ? 'mp4_failed' : 'unsupported');
   }, []);
 
   const handleNicknameCancel = useCallback(() => {
@@ -932,8 +987,8 @@ export default function SyncWatch() {
           >
             {tab === "members" ? `${t.sync.members} (${peerCount})`
               : tab === "chat" ? t.sync.chat
-              : tab === "queue" ? `${t.sync.queue}${queue.length > 0 ? ` (${queue.length})` : ""}`
-              : t.sync.log}
+                : tab === "queue" ? `${t.sync.queue}${queue.length > 0 ? ` (${queue.length})` : ""}`
+                  : t.sync.log}
           </button>
         ))}
       </div>
@@ -1202,7 +1257,7 @@ export default function SyncWatch() {
                 playsInline
                 controls
                 className="w-full h-full"
-                style={{ display: currentMedia?.source === "direct" ? "block" : "none" }}
+                style={{ display: currentMedia?.source === "direct" && !playbackError ? "block" : "none" }}
                 onLoadedMetadata={handleDirectVideoReady}
                 onPlay={handleDirectVideoPlay}
                 onPause={handleDirectVideoPause}
@@ -1210,7 +1265,44 @@ export default function SyncWatch() {
                 onEnded={handleDirectVideoEnded}
                 onError={handleDirectVideoError}
               />
-              {currentMedia?.source === "direct" && directPausedFrame && directVideoRef.current?.paused && (
+              {/* 瀏覽器不支援提示覆蓋層 — 當 HLS + MP4 雙重降級均失敗時顯示 */}
+              {currentMedia?.source === "direct" && playbackError && (
+                <div className="absolute inset-0 z-40 flex flex-col items-center justify-center gap-4 bg-black/85 backdrop-blur-sm px-6 text-center">
+                  <div className="w-14 h-14 rounded-full bg-destructive/15 border border-destructive/30 flex items-center justify-center">
+                    <WifiOff className="w-7 h-7 text-destructive" />
+                  </div>
+                  <div className="space-y-2">
+                    <p className="text-sm font-bold text-foreground">
+                      {playbackError === 'mp4_failed'
+                        ? '無法播放此影片'
+                        : browserUnsupported
+                          ? '瀏覽器不支援此串流格式'
+                          : '無法播放此格式'}
+                    </p>
+                    <p className="text-xs text-muted-foreground max-w-xs leading-relaxed">
+                      {playbackError === 'mp4_failed'
+                        ? 'HLS 與 MP4 串流均無法載入。請嘗試使用 Chrome 或 Firefox，或確認 Jellyfin 伺服器的轉碼設定。'
+                        : browserUnsupported
+                          ? '您的瀏覽器不支援 HLS (M3U8) 串流格式。請使用 Chrome、Firefox 或 Edge 以獲得最佳相容性。'
+                          : '目前的瀏覽器不支援此影片格式。建議使用 Chrome、Firefox 或 Edge 以獲得最佳相容性。'}
+                    </p>
+                    {browserUnsupported && (
+                      <div className="flex items-center justify-center gap-3 pt-1 text-[10px] text-muted-foreground/70">
+                        <span className="px-2 py-0.5 rounded bg-secondary/60">Chrome</span>
+                        <span className="px-2 py-0.5 rounded bg-secondary/60">Firefox</span>
+                        <span className="px-2 py-0.5 rounded bg-secondary/60">Edge</span>
+                      </div>
+                    )}
+                  </div>
+                  <button
+                    onClick={() => { setPlaybackError(null); setBrowserUnsupported(false); }}
+                    className="mt-1 px-4 py-1.5 rounded-md bg-secondary text-secondary-foreground text-xs font-medium hover:bg-secondary/80 transition-colors"
+                  >
+                    關閉
+                  </button>
+                </div>
+              )}
+              {currentMedia?.source === "direct" && directPausedFrame && directVideoRef.current?.paused && !playbackError && (
                 <img
                   src={directPausedFrame}
                   alt="Paused frame"
@@ -1280,48 +1372,48 @@ function LobbyView({
     <div className="min-h-[calc(100dvh-9rem)] flex flex-col items-center justify-center px-3 py-8 gap-8">
       {/* Hero / create-join section */}
       <div className="w-full max-w-lg space-y-6">
-          <div className="text-center space-y-2">
-            <Radio className="w-12 h-12 text-primary mx-auto" />
-            <h1 className="text-3xl font-bold text-foreground">{t.sync.syncWatch}</h1>
-            <p className="text-muted-foreground text-sm">{t.sync.createDesc}</p>
+        <div className="text-center space-y-2">
+          <Radio className="w-12 h-12 text-primary mx-auto" />
+          <h1 className="text-3xl font-bold text-foreground">{t.sync.syncWatch}</h1>
+          <p className="text-muted-foreground text-sm">{t.sync.createDesc}</p>
+        </div>
+
+        <div className="space-y-4">
+          <Button
+            onClick={handleCreateRoom}
+            className="w-full gap-2 min-h-[48px]"
+            size="lg"
+          >
+            <Plus className="w-5 h-5" />
+            {t.sync.createRoom}
+          </Button>
+
+          <div className="flex items-center gap-2">
+            <div className="flex-1 h-px bg-border" />
+            <span className="text-xs text-muted-foreground uppercase tracking-wider">{t.sync.orJoin}</span>
+            <div className="flex-1 h-px bg-border" />
           </div>
 
-          <div className="space-y-4">
+          <div className={cn("gap-2", isMobile ? "grid grid-cols-1" : "flex")}>
+            <Input
+              placeholder={t.sync.enterRoom}
+              value={joinInput}
+              onChange={(e) => setJoinInput(e.target.value)}
+              className="flex-1 min-h-[48px]"
+              disabled={isJoiningRoom}
+              onKeyDown={(e) => e.key === "Enter" && handleJoinRoom()}
+            />
             <Button
-              onClick={handleCreateRoom}
-              className="w-full gap-2 min-h-[48px]"
-              size="lg"
+              onClick={handleJoinRoom}
+              variant="secondary"
+              className="min-h-[48px]"
+              disabled={isJoiningRoom || !joinInput.trim()}
             >
-              <Plus className="w-5 h-5" />
-              {t.sync.createRoom}
+              {isJoiningRoom ? t.common.loading : t.sync.join}
             </Button>
-
-            <div className="flex items-center gap-2">
-              <div className="flex-1 h-px bg-border" />
-              <span className="text-xs text-muted-foreground uppercase tracking-wider">{t.sync.orJoin}</span>
-              <div className="flex-1 h-px bg-border" />
-            </div>
-
-            <div className={cn("gap-2", isMobile ? "grid grid-cols-1" : "flex")}>
-              <Input
-                placeholder={t.sync.enterRoom}
-                value={joinInput}
-                onChange={(e) => setJoinInput(e.target.value)}
-                className="flex-1 min-h-[48px]"
-                disabled={isJoiningRoom}
-                onKeyDown={(e) => e.key === "Enter" && handleJoinRoom()}
-              />
-              <Button
-                onClick={handleJoinRoom}
-                variant="secondary"
-                className="min-h-[48px]"
-                disabled={isJoiningRoom || !joinInput.trim()}
-              >
-                {isJoiningRoom ? t.common.loading : t.sync.join}
-              </Button>
-            </div>
           </div>
         </div>
+      </div>
 
       {/* Room list */}
       <div className="w-full max-w-2xl mx-auto">
