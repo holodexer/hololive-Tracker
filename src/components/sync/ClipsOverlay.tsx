@@ -14,6 +14,7 @@ import { mixClipsByLanguage } from "@/lib/clipMixing";
 import { useSettings } from "@/contexts/SettingsContext";
 import { format } from "date-fns";
 import { buildYouTubeThumbnailUrl } from "@/lib/urls";
+import { buildJellyfinMasterUrl } from "@/lib/jellyfin";
 
 interface ClipsOverlayProps {
   open: boolean;
@@ -477,7 +478,11 @@ export function ClipsOverlay({
     const playableTypes = ["Movie", "Episode", "Video", "Audio", "MusicVideo"];
     if (playableTypes.includes(item.Type)) {
       const base = jellyfinUrl.replace(/\/+$/, "");
-      const streamUrl = `${base}/Videos/${item.Id}/master.m3u8?api_key=${jellyfinToken}&MediaSourceId=${item.Id}&VideoCodec=h264&AudioCodec=aac,mp3&VideoBitrate=139616000&AudioBitrate=384000&MaxFramerate=60`;
+      const streamUrl = buildJellyfinMasterUrl({
+        baseUrl: base,
+        itemId: item.Id,
+        apiKey: jellyfinToken,
+      });
       onSelectClip(streamUrl, item.Name);
       return;
     }
@@ -487,7 +492,14 @@ export function ClipsOverlay({
   const handleJellyfinQueueItem = (item: JellyfinItem) => {
     if (!onAddToQueue || !jellyfinUrl || !jellyfinToken) return;
     const base = jellyfinUrl.replace(/\/+$/, "");
-    onAddToQueue(`${base}/Videos/${item.Id}/master.m3u8?api_key=${jellyfinToken}&MediaSourceId=${item.Id}&VideoCodec=h264&AudioCodec=aac,mp3&VideoBitrate=139616000&AudioBitrate=384000&MaxFramerate=60`, item.Name);
+    onAddToQueue(
+      buildJellyfinMasterUrl({
+        baseUrl: base,
+        itemId: item.Id,
+        apiKey: jellyfinToken,
+      }),
+      item.Name
+    );
   };
 
   const handleJellyfinSelectLib = (lib: JellyfinItem) => {

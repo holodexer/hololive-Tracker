@@ -8,7 +8,7 @@
 import { useState, useRef, useCallback, useEffect, useMemo } from "react";
 import Hls from "hls.js";
 import { useSearchParams } from "react-router-dom";
-import { Radio, Copy, Plus, Users, RefreshCw, ArrowLeft, Wifi, WifiOff, RotateCcw, VolumeX, Play } from "lucide-react";
+import { Radio, Copy, Plus, Users, RefreshCw, ArrowLeft, Wifi, WifiOff, RotateCcw, VolumeX, Play, AlertTriangle, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -29,6 +29,12 @@ import { SystemMessages } from "@/components/sync/SystemMessages";
 import { QueueCountdown } from "@/components/sync/QueueCountdown";
 import { deserializeMedia, parseMediaInput, serializeMedia } from "@/lib/mediaSource";
 import { TAB_PANEL_TRANSITION_CLASS } from "@/lib/transitions";
+import {
+  buildJellyfinMasterUrl,
+  buildJellyfinMp4FallbackUrl,
+  isJellyfinDownloadUrl,
+  parseJellyfinUrl,
+} from "@/lib/jellyfin";
 
 declare global {
   interface Window {
@@ -103,6 +109,7 @@ export default function SyncWatch() {
   const [directPausedFrame, setDirectPausedFrame] = useState<string | null>(null);
   const [playbackError, setPlaybackError] = useState<string | null>(null);
   const [browserUnsupported, setBrowserUnsupported] = useState(false);
+  const [showSafariHlsWarning, setShowSafariHlsWarning] = useState(false);
   const hlsFallbackUrlRef = useRef<string | null>(null);
 
   const playerRef = useRef<any>(null);
@@ -111,10 +118,18 @@ export default function SyncWatch() {
   const playerContainerRef = useRef<HTMLDivElement>(null);
   const playerAreaRef = useRef<HTMLDivElement>(null);
   const suppressSyncRef = useRef(false);
+  const suppressTimeoutRef = useRef<number | null>(null);
+  const videoChangeLockTimeoutRef = useRef<number | null>(null);
+  const localSwitchSuppressTimeoutRef = useRef<number | null>(null);
+  const ignoreDirectPauseUntilRef = useRef(0);
+  const directWasPlayingBeforeSeekRef = useRef(false);
   const effectiveHostRef = useRef(false);
   const guestControlEnabledRef = useRef(false);
   const currentVideoIdRef = useRef<string | null>(null);
   const videoChangeLockRef = useRef(false);
+  const lastAppliedSyncSentAtRef = useRef(0);
+  const lastAppliedVideoSwitchSentAtRef = useRef(0);
+  const lastLocalVideoChangeAtRef = useRef(0);
   const playNextRef = useRef<() => void>(() => { });
   const lastGuestApplyAtRef = useRef(0);
   const guestAutoplayKickDoneForRef = useRef<string | null>(null);
@@ -209,19 +224,56 @@ export default function SyncWatch() {
   }, [roomId, amIHost, peerCount, username, avatar]);
 
   // Keep playNextRef current for YT callback
+  const runVideoChangeLock = useCallback((durationMs = 1400) => {
+    videoChangeLockRef.current = true;
+    if (videoChangeLockTimeoutRef.current) {
+      window.clearTimeout(videoChangeLockTimeoutRef.current);
+    }
+    videoChangeLockTimeoutRef.current = window.setTimeout(() => {
+      videoChangeLockRef.current = false;
+      videoChangeLockTimeoutRef.current = null;
+    }, durationMs);
+  }, []);
+
+  const applyLocalVideoChange = useCallback((videoId: string) => {
+    // Block transient play/pause events from previous media instances.
+    suppressSyncRef.current = true;
+    if (localSwitchSuppressTimeoutRef.current) {
+      window.clearTimeout(localSwitchSuppressTimeoutRef.current);
+    }
+    localSwitchSuppressTimeoutRef.current = window.setTimeout(() => {
+      suppressSyncRef.current = false;
+      localSwitchSuppressTimeoutRef.current = null;
+    }, 900);
+
+    lastLocalVideoChangeAtRef.current = Date.now();
+    currentVideoIdRef.current = videoId;
+    setCurrentVideoId(videoId);
+    guestAutoplayKickDoneForRef.current = null;
+    setNeedsGuestUnmute(false);
+    setDirectPausedFrame(null);
+    runVideoChangeLock();
+  }, [runVideoChangeLock]);
+
+  const buildSyncState = useCallback((videoId: string, isPlaying: boolean, currentTime: number): SyncState => {
+    return {
+      videoId,
+      isPlaying,
+      currentTime,
+      timestamp: Date.now(),
+      sentAt: Date.now(),
+    };
+  }, []);
+
   const doPlayNext = useCallback(() => {
     const next = playNextFromQueue();
     if (next) {
       setCountdown(null);
-      setCurrentVideoId(next.videoId);
-      videoChangeLockRef.current = true;
-      setTimeout(() => { videoChangeLockRef.current = false; }, 3000);
-      const state: SyncState = {
-        videoId: next.videoId, isPlaying: true, currentTime: 0, timestamp: Date.now(),
-      };
+      applyLocalVideoChange(next.videoId);
+      const state = buildSyncState(next.videoId, true, 0);
       broadcastVideoChange(state);
     }
-  }, [playNextFromQueue, broadcastVideoChange]);
+  }, [playNextFromQueue, applyLocalVideoChange, buildSyncState, broadcastVideoChange]);
 
   // Keep playNextRef current for YT callback
   useEffect(() => {
@@ -244,23 +296,22 @@ export default function SyncWatch() {
       if (!playerRef.current?.getCurrentTime) return null;
       const ytState = playerRef.current.getPlayerState?.();
       return {
-        videoId: currentVideoIdRef.current,
-        isPlaying:
+        ...buildSyncState(
+          currentVideoIdRef.current,
           ytState === window.YT?.PlayerState?.PLAYING ||
-          ytState === window.YT?.PlayerState?.BUFFERING,
-        currentTime: playerRef.current.getCurrentTime(),
-        timestamp: Date.now(),
+            ytState === window.YT?.PlayerState?.BUFFERING,
+          playerRef.current.getCurrentTime()
+        ),
       };
     }
 
     if (!directVideoRef.current) return null;
-    return {
-      videoId: currentVideoIdRef.current,
-      isPlaying: !directVideoRef.current.paused,
-      currentTime: directVideoRef.current.currentTime ?? 0,
-      timestamp: Date.now(),
-    };
-  }, []);
+    return buildSyncState(
+      currentVideoIdRef.current,
+      !directVideoRef.current.paused,
+      directVideoRef.current.currentTime ?? 0
+    );
+  }, [buildSyncState]);
 
   // Register the sync request handler so the host responds to new joiners
   useEffect(() => {
@@ -372,36 +423,41 @@ export default function SyncWatch() {
       // 我們專門針對 Safari 放棄使用切片 HLS，改用 Jellyfin 的「即時漸進式 MP4 轉檔 (Progressive MP4)」接口！
       const isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
 
-      const jellyfinMatch = finalUrl.match(/^(https?:\/\/.+?)\/(?:Videos|Items)\/([^/?]+)/i);
-      const apiKeyMatch = finalUrl.match(/[?&]api_key=([^&]+)/);
       // /Download 端點是直接輸出原始檔案，瀏覽器通常可以直接播放
       // 不應將其轉換為串流 URL，否則若轉碼失敗反而無法播放
-      const isDownloadEndpoint = /\/(?:Videos|Items)\/[^/]+\/Download(\?|$)/i.test(finalUrl);
+      const jellyfinParts = parseJellyfinUrl(finalUrl);
+      const isDownloadEndpoint = isJellyfinDownloadUrl(finalUrl);
 
-      if (jellyfinMatch && apiKeyMatch && !currentMedia.value.includes('youtube') && !isDownloadEndpoint) {
-        const [, base, itemId] = jellyfinMatch;
-        const apiKey = apiKeyMatch[1];
+      // 每次載入新影片都產生獨立的 PlaySessionId，避免 Jellyfin server 把同一 DeviceId
+      // 的新請求誤認為舊轉碼 session 而產生衝突（DeviceId 固定代表裝置，PlaySessionId 代表單次播放）
+      const playSessionId = `${myPeerId}_${Date.now()}`;
+
+      if (jellyfinParts && !currentMedia.value.includes('youtube') && !isDownloadEndpoint) {
         // 所有瀏覽器（包含 Safari）統一使用 master.m3u8：
-        //   - Chrome/Firefox：由 hls.js 接管
-        //   - Safari：以原生 HLS 播放（Safari 原生支援 HLS！）
-        // 若原生 HLS 失敗（code 4），error handler 會自動降級至 stream.mp4
-        finalUrl = `${base}/Videos/${itemId}/master.m3u8?api_key=${apiKey}&MediaSourceId=${itemId}&VideoCodec=h264&AudioCodec=aac,mp3&VideoBitrate=139616000&AudioBitrate=384000&MaxFramerate=60`;
+        // 加入 DeviceId 與 PlaySessionId 隔離雙端獨立轉碼，避免 FFmpeg 切片時間軸互相覆蓋或漂移
+        finalUrl = buildJellyfinMasterUrl({
+          ...jellyfinParts,
+          deviceId: myPeerId,
+          playSessionId,
+        });
       }
 
       const isM3u8 = finalUrl.toLowerCase().includes('.m3u8');
 
+      // 預先記住對應的 MP4 fallback URL，供 HLS 不可恢復錯誤或 Safari 畫質/色偏異常時切換
+      const jellyfinFallbackParts = parseJellyfinUrl(finalUrl);
+      if (jellyfinFallbackParts && isM3u8) {
+        hlsFallbackUrlRef.current = buildJellyfinMp4FallbackUrl({
+          ...jellyfinFallbackParts,
+          deviceId: myPeerId,
+          playSessionId,
+        });
+      } else {
+        hlsFallbackUrlRef.current = null;
+      }
+
       if (isM3u8 && !isSafari && Hls.isSupported()) {
         // Chrome 等非 Safari 瀏覽器使用 hls.js 解析 M3U8
-        // 預先記住對應的 MP4 fallback URL，供 HLS 不可恢復錯誤時切換
-        const jellyfinMatchFallback = finalUrl.match(/^(https?:\/\/.+?)\/(?:Videos|Items)\/([^/?]+)/i);
-        const apiKeyMatchFallback = finalUrl.match(/[?&]api_key=([^&]+)/);
-        if (jellyfinMatchFallback && apiKeyMatchFallback) {
-          const [, baseFb, itemIdFb] = jellyfinMatchFallback;
-          const apiKeyFb = apiKeyMatchFallback[1];
-          hlsFallbackUrlRef.current = `${baseFb}/Videos/${itemIdFb}/stream.mp4?api_key=${apiKeyFb}&Container=mp4&VideoCodec=h264&AudioCodec=aac,mp3&VideoBitrate=8000000`;
-        } else {
-          hlsFallbackUrlRef.current = null;
-        }
 
         const hls = new Hls({
           maxBufferLength: 30,
@@ -452,6 +508,14 @@ export default function SyncWatch() {
         //    若 HLS 失敗（code 4），error handler 會降級至 stream.mp4
         // 2. 所有瀏覽器 + 非 m3u8（MP4、Download 直連等）：原生 <video> 直出
         setBrowserUnsupported(false);
+
+        // 若為 Safari 原生 HLS，顯示軟性提示，建議使用者切換瀏覽器
+        if (isSafari && isM3u8) {
+          setShowSafariHlsWarning(true);
+        } else {
+          setShowSafariHlsWarning(false);
+        }
+
         el.src = finalUrl;
         el.load();
         el.play().catch(() => { });
@@ -462,13 +526,18 @@ export default function SyncWatch() {
       el.load();
     }
 
+    // 當關閉影片時重置警告
+    if (currentMedia?.source !== "direct") {
+      setShowSafariHlsWarning(false);
+    }
+
     return () => {
       if (hlsRef.current) {
         hlsRef.current.destroy();
         hlsRef.current = null;
       }
     };
-  }, [currentMedia]);
+  }, [currentMedia, myPeerId]);
 
   // --- 事件處理與副作用：YouTube 播放器初始化 ---
   // YouTube API 使用獨立的內部 div 作為掛載點，這樣 playerContainerRef 才能穩定的被 React 持有。
@@ -520,12 +589,11 @@ export default function SyncWatch() {
             if (!effectiveHostRef.current && !guestControlEnabledRef.current) return;
             const vid = currentVideoIdRef.current;
             if (!vid) return;
-            const state: SyncState = {
-              videoId: vid,
-              isPlaying: event.data === window.YT.PlayerState.PLAYING,
-              currentTime: event.target.getCurrentTime(),
-              timestamp: Date.now(),
-            };
+            const state = buildSyncState(
+              vid,
+              event.data === window.YT.PlayerState.PLAYING,
+              event.target.getCurrentTime()
+            );
             broadcastSync(state);
           },
         },
@@ -533,24 +601,43 @@ export default function SyncWatch() {
     });
 
     return () => { cancelled = true; };
-  }, [currentVideoId, currentMedia]);
+  }, [currentVideoId, currentMedia, buildSyncState, broadcastSync, notifyPlayerReady]);
 
   // --- 狀態廣播與同步處理 (State Sync Engine) ---
   // 將房間房主的播放狀態、進度套用到全體成員本地播放器的核心邏輯。
   useEffect(() => {
     if (!syncState) return;
 
+    const incomingSentAt = syncState.sentAt ?? syncState.timestamp ?? 0;
+
     // 若為房主，除非開放了「訪客控制(guestControlEnabled)」，否則不理會其他人的廣播
     if (effectiveHost && !guestControlEnabled) return;
 
-    // 防止網速較慢的設備在切換影片時，收到舊影片的暫停/播放廣播而造成抖動
-    if (videoChangeLockRef.current && syncState.videoId !== currentVideoIdRef.current) return;
+    // 在切片鎖期間只忽略同片的抖動同步，跨片切換不可被鎖擋下。
+    if (videoChangeLockRef.current && syncState.videoId === currentVideoIdRef.current) return;
 
     // If different video, load it (from host's video_change broadcast)
     if (syncState.videoId !== currentVideoId) {
+      if (incomingSentAt > 0 && incomingSentAt < lastLocalVideoChangeAtRef.current) {
+        return;
+      }
+
+      if (incomingSentAt > 0) {
+        if (incomingSentAt < lastAppliedVideoSwitchSentAtRef.current) {
+          return;
+        }
+        lastAppliedVideoSwitchSentAtRef.current = incomingSentAt;
+        if (incomingSentAt > lastAppliedSyncSentAtRef.current) {
+          lastAppliedSyncSentAtRef.current = incomingSentAt;
+        }
+      }
+
+      runVideoChangeLock();
+      currentVideoIdRef.current = syncState.videoId;
       setCurrentVideoId(syncState.videoId);
       guestAutoplayKickDoneForRef.current = null;
       setNeedsGuestUnmute(false);
+      setDirectPausedFrame(null);
 
       if (!effectiveHost) {
         // Ask one follow-up sync after media switch once local player is likely ready.
@@ -573,46 +660,66 @@ export default function SyncWatch() {
 
     if (!effectiveHost) {
       const now = Date.now();
-      if (now - lastGuestApplyAtRef.current < 650) {
+      if (now - lastGuestApplyAtRef.current < 420) {
         return;
       }
       lastGuestApplyAtRef.current = now;
     }
 
-    suppressSyncRef.current = true;
+    if (incomingSentAt > 0 && incomingSentAt < lastAppliedSyncSentAtRef.current) {
+      return;
+    }
 
-    const timeDrift = (Date.now() - syncState.timestamp) / 1000;
-    const latencyCompensation = Math.min(0.35, Math.max(0.08, timeDrift * 0.3));
+    if (incomingSentAt > 0) {
+      lastAppliedSyncSentAtRef.current = incomingSentAt;
+    }
+
+    // 開始進行同步應用，鎖定廣播防止無窮迴圈
+    suppressSyncRef.current = true;
+    if (suppressTimeoutRef.current) window.clearTimeout(suppressTimeoutRef.current);
+    let expectsSeek = false;
+
+    // 若為暫停狀態，不應計算網路漂移或延遲補償（因為畫面是靜止的）
+    const timeDrift = syncState.isPlaying ? (Date.now() - syncState.timestamp) / 1000 : 0;
+    const latencyCompensation = syncState.isPlaying ? Math.min(0.22, Math.max(0.04, timeDrift * 0.22)) : 0;
     const targetTime = syncState.currentTime + timeDrift + latencyCompensation;
-    const syncThreshold = effectiveHost ? SYNC_THRESHOLD : 1.2;
+    const syncThreshold = effectiveHost ? Math.max(0.95, SYNC_THRESHOLD - 0.35) : 0.85;
     const currentPlayerTime = media.source === "youtube"
       ? (playerRef.current?.getCurrentTime?.() ?? 0)
       : (directVideoRef.current?.currentTime ?? 0);
 
+    // 處理進度跳轉 (Seek)
     if (Math.abs(currentPlayerTime - targetTime) > syncThreshold) {
       if (media.source === "youtube") {
         if (playerRef.current?.seekTo) {
-          // For guests, avoid pause->seek oscillation loops and seek directly.
           playerRef.current.seekTo(targetTime, true);
         }
       } else if (directVideoRef.current) {
-        directVideoRef.current.pause();
-        directVideoRef.current.currentTime = targetTime;
+        expectsSeek = true;
+        const el = directVideoRef.current;
+        // 綁定單次監聽器：直到真的緩衝完畢觸發 seeked 或發生 error 時，才解除 suppressSync
+        const cleanup = () => {
+          el.removeEventListener('seeked', cleanup);
+          el.removeEventListener('error', cleanup);
+          suppressSyncRef.current = false;
+        };
+        el.addEventListener('seeked', cleanup);
+        el.addEventListener('error', cleanup);
+        
+        el.currentTime = targetTime;
       }
     }
 
+    // 處理播放器狀態 (Play/Pause)
     if (syncState.isPlaying) {
-      // Small delay to let buffer catch up after seek
-      setTimeout(() => {
-        if (media.source === "youtube") {
+      if (media.source === "youtube") {
+        setTimeout(() => {
           playerRef.current?.playVideo();
-
           if (!effectiveHost) {
             window.setTimeout(() => {
               const yt = window.YT?.PlayerState;
               const playerState = playerRef.current?.getPlayerState?.();
               const isRunning = playerState === yt?.PLAYING || playerState === yt?.BUFFERING;
-
               if (!isRunning && guestAutoplayKickDoneForRef.current !== syncState.videoId) {
                 playerRef.current?.mute?.();
                 playerRef.current?.playVideo?.();
@@ -621,22 +728,28 @@ export default function SyncWatch() {
               }
             }, 650);
           }
-        } else {
-          directVideoRef.current?.play().catch(() => {
-            // Ignore autoplay restriction errors.
-          });
-        }
-      }, 150);
+        }, 150);
+      } else if (directVideoRef.current) {
+         // HLS/HTML5: 安全地指令播放，無須不相干的 timeout 與 pause。如果正在緩衝，瀏覽器原生會等
+         if (directVideoRef.current.paused) {
+             directVideoRef.current.play().catch(() => {});
+         }
+      }
     } else {
       if (media.source === "youtube") {
         playerRef.current?.pauseVideo();
-      } else {
-        directVideoRef.current?.pause();
+      } else if (directVideoRef.current) {
+        directVideoRef.current.pause();
       }
     }
 
-    setTimeout(() => { suppressSyncRef.current = false; }, 500);
-  }, [syncState, effectiveHost, currentVideoId, guestControlEnabled, requestSync]);
+    // 若沒有進度跳轉事件 (通常是單純的點擊暫停/繼續)，給予一小段固定 Timeout 來覆蓋狀態變化期
+    if (!expectsSeek) {
+      suppressTimeoutRef.current = window.setTimeout(() => {
+        suppressSyncRef.current = false;
+      }, 500);
+    }
+  }, [syncState, effectiveHost, currentVideoId, guestControlEnabled, requestSync, runVideoChangeLock]);
 
   const handleCreateRoom = useCallback(() => {
     if (!username.trim()) {
@@ -707,30 +820,22 @@ export default function SyncWatch() {
     const media = parseMediaInput(videoInput);
     if (!media) return;
     const serialized = serializeMedia(media);
-    setCurrentVideoId(serialized);
-    videoChangeLockRef.current = true;
-    setTimeout(() => { videoChangeLockRef.current = false; }, 3000);
-    const state: SyncState = {
-      videoId: serialized, isPlaying: true, currentTime: 0, timestamp: Date.now(),
-    };
+    applyLocalVideoChange(serialized);
+    const state = buildSyncState(serialized, true, 0);
     broadcastVideoChange(state);
     setVideoInput("");
-  }, [videoInput, broadcastVideoChange, effectiveHost, guestControlEnabled]);
+  }, [videoInput, broadcastVideoChange, effectiveHost, guestControlEnabled, applyLocalVideoChange, buildSyncState]);
 
   const handleSelectClip = useCallback((videoId: string, _title: string) => {
     if (!effectiveHost && !guestControlEnabled) return;
     const serialized = videoId.startsWith("http")
       ? serializeMedia({ source: "direct", value: videoId })
       : serializeMedia({ source: "youtube", value: videoId });
-    setCurrentVideoId(serialized);
-    videoChangeLockRef.current = true;
-    setTimeout(() => { videoChangeLockRef.current = false; }, 3000);
-    const state: SyncState = {
-      videoId: serialized, isPlaying: true, currentTime: 0, timestamp: Date.now(),
-    };
+    applyLocalVideoChange(serialized);
+    const state = buildSyncState(serialized, true, 0);
     broadcastVideoChange(state);
     setShowClips(false);
-  }, [broadcastVideoChange, effectiveHost, guestControlEnabled]);
+  }, [broadcastVideoChange, effectiveHost, guestControlEnabled, applyLocalVideoChange, buildSyncState]);
 
   const handleAddToQueue = useCallback((videoId: string, title?: string) => {
     const serialized = videoId.startsWith("http")
@@ -743,14 +848,10 @@ export default function SyncWatch() {
     if (!effectiveHost && !guestControlEnabled) return;
     const item = playFromQueue(itemId);
     if (!item) return;
-    setCurrentVideoId(item.videoId);
-    videoChangeLockRef.current = true;
-    setTimeout(() => { videoChangeLockRef.current = false; }, 3000);
-    const state: SyncState = {
-      videoId: item.videoId, isPlaying: true, currentTime: 0, timestamp: Date.now(),
-    };
+    applyLocalVideoChange(item.videoId);
+    const state = buildSyncState(item.videoId, true, 0);
     broadcastVideoChange(state);
-  }, [effectiveHost, guestControlEnabled, playFromQueue, broadcastVideoChange]);
+  }, [effectiveHost, guestControlEnabled, playFromQueue, broadcastVideoChange, applyLocalVideoChange, buildSyncState]);
 
   const copyInviteLink = useCallback(() => {
     const basePath = import.meta.env.BASE_URL || "/";
@@ -774,6 +875,23 @@ export default function SyncWatch() {
     setCurrentVideoId(null);
     setVideoInput("");
     setJoinInput("");
+    lastAppliedSyncSentAtRef.current = 0;
+    lastAppliedVideoSwitchSentAtRef.current = 0;
+    lastLocalVideoChangeAtRef.current = 0;
+    if (suppressTimeoutRef.current) {
+      window.clearTimeout(suppressTimeoutRef.current);
+      suppressTimeoutRef.current = null;
+    }
+    if (videoChangeLockTimeoutRef.current) {
+      window.clearTimeout(videoChangeLockTimeoutRef.current);
+      videoChangeLockTimeoutRef.current = null;
+    }
+    if (localSwitchSuppressTimeoutRef.current) {
+      window.clearTimeout(localSwitchSuppressTimeoutRef.current);
+      localSwitchSuppressTimeoutRef.current = null;
+    }
+    videoChangeLockRef.current = false;
+    suppressSyncRef.current = false;
     if (playerRef.current?.destroy) {
       playerRef.current.destroy();
       playerRef.current = null;
@@ -800,14 +918,13 @@ export default function SyncWatch() {
     if (!effectiveHostRef.current && !guestControlEnabledRef.current) return;
     const vid = currentVideoIdRef.current;
     if (!vid || !directVideoRef.current) return;
-    const state: SyncState = {
-      videoId: vid,
-      isPlaying: !directVideoRef.current.paused,
-      currentTime: directVideoRef.current.currentTime ?? 0,
-      timestamp: Date.now(),
-    };
+    const state = buildSyncState(
+      vid,
+      !directVideoRef.current.paused,
+      directVideoRef.current.currentTime ?? 0
+    );
     broadcastSync(state);
-  }, [broadcastSync]);
+  }, [broadcastSync, buildSyncState]);
 
   const captureDirectPausedFrame = useCallback(() => {
     const el = directVideoRef.current;
@@ -834,6 +951,9 @@ export default function SyncWatch() {
   }, []);
 
   const handleDirectVideoPause = useCallback(() => {
+    if (Date.now() < ignoreDirectPauseUntilRef.current) {
+      return;
+    }
     captureDirectPausedFrame();
     handleDirectVideoSync();
   }, [captureDirectPausedFrame, handleDirectVideoSync]);
@@ -846,6 +966,16 @@ export default function SyncWatch() {
   const handleDirectVideoReady = useCallback(() => {
     notifyPlayerReady();
   }, [notifyPlayerReady]);
+
+  const handleDirectVideoSeeking = useCallback(() => {
+    const el = directVideoRef.current;
+    if (!el) return;
+    directWasPlayingBeforeSeekRef.current = !el.paused;
+    if (directWasPlayingBeforeSeekRef.current) {
+      // Browsers may emit a transient pause while dragging seekbar.
+      ignoreDirectPauseUntilRef.current = Date.now() + 1100;
+    }
+  }, []);
 
   const handleDirectVideoEnded = useCallback(() => {
     if (!effectiveHostRef.current) return;
@@ -866,6 +996,14 @@ export default function SyncWatch() {
     const url = el.src;
     if (!url) return;
 
+    // HLS.js 使用 blob: URL 作為 MediaSource；這些 URL 的錯誤由 HLS.js 的 Hls.Events.ERROR 自行處理。
+    // 若我們攔截這些 blob 錯誤，切換影片時舊 HLS 的 blob 被撤銷後會觸發 stale error event，
+    // 誤呼叫 setPlaybackError 把 <video> 元素隱藏，導致新影片無法顯示。
+    if (url.startsWith("blob:")) return;
+
+    // 若 HLS 實例當前活躍，由它的 error handler 負責，此處靜默
+    if (hlsRef.current) return;
+
     const errorCode = el.error?.code ?? 0;
 
     // 只有 code 4 才是真正的瀏覽器格式不支援；其他全部靜默
@@ -874,16 +1012,17 @@ export default function SyncWatch() {
     }
 
     // 以下確定是 code 4 — 瀏覽器無法處理此格式
-    const jellyfinMatch = url.match(/^(https?:\/\/.+?)\/(?:Videos|Items)\/([^/?]+)/i);
-    const apiKeyMatch = url.match(/[?&]api_key=([^&]+)/);
+    const jellyfinParts = parseJellyfinUrl(url);
     const isAlreadyMp4Fallback = url.includes('stream.mp4') && url.includes('Container=mp4');
 
-    if (jellyfinMatch && apiKeyMatch && !isAlreadyMp4Fallback) {
+    if (jellyfinParts && !isAlreadyMp4Fallback) {
       // 非 MP4 Jellyfin URL（例如 m3u8）格式不支援 → 切換至漸進式 MP4 作為保底
       jellyfinTranscodeAttemptedRef.current = url;
-      const [, base, itemId] = jellyfinMatch;
-      const apiKey = apiKeyMatch[1];
-      el.src = `${base}/Videos/${itemId}/stream.mp4?api_key=${apiKey}&Container=mp4&VideoCodec=h264&AudioCodec=aac,mp3&VideoBitrate=8000000`;
+      el.src = buildJellyfinMp4FallbackUrl({
+        ...jellyfinParts,
+        deviceId: myPeerId,
+        playSessionId: myPeerId,
+      });
       el.load();
       el.play().catch(() => { });
       return;
@@ -891,7 +1030,7 @@ export default function SyncWatch() {
 
     // MP4 降級 URL 也無法播放，或非 Jellyfin 連結 → 顯示對應錯誤提示
     setPlaybackError(isAlreadyMp4Fallback ? 'mp4_failed' : 'unsupported');
-  }, []);
+  }, [myPeerId]);
 
   const handleNicknameCancel = useCallback(() => {
     setNeedsNickname(false);
@@ -1259,6 +1398,7 @@ export default function SyncWatch() {
                 className="w-full h-full"
                 style={{ display: currentMedia?.source === "direct" && !playbackError ? "block" : "none" }}
                 onLoadedMetadata={handleDirectVideoReady}
+                onSeeking={handleDirectVideoSeeking}
                 onPlay={handleDirectVideoPlay}
                 onPause={handleDirectVideoPause}
                 onSeeked={handleDirectVideoSync}
@@ -1300,6 +1440,25 @@ export default function SyncWatch() {
                   >
                     關閉
                   </button>
+                </div>
+              )}
+              {/* Safari 原生 HLS 軟性提示覆蓋層 */}
+              {currentMedia?.source === "direct" && showSafariHlsWarning && !playbackError && (
+                <div className="absolute top-0 left-0 right-0 z-30 p-2 pointer-events-none flex justify-center">
+                  <div className="pointer-events-auto flex items-center gap-3 bg-card/85 backdrop-blur-md border border-border/60 pl-3 pr-2 py-1.5 rounded-lg shadow-lg max-w-[90%] md:max-w-md">
+                    <AlertTriangle className="w-4 h-4 text-amber-500 shrink-0" />
+                    <p className="text-xs text-foreground/90 flex-1 truncate">
+                      當前使用瀏覽器可能會有畫質與色偏限制，建議使用 Chrome 或 Edge 獲得最佳體驗。
+                    </p>
+                    <div className="flex items-center shrink-0">
+                      <button
+                        onClick={() => setShowSafariHlsWarning(false)}
+                        className="p-1 rounded text-muted-foreground hover:bg-muted/80 transition-colors"
+                      >
+                        <X className="w-3 h-3" />
+                      </button>
+                    </div>
+                  </div>
                 </div>
               )}
               {currentMedia?.source === "direct" && directPausedFrame && directVideoRef.current?.paused && !playbackError && (

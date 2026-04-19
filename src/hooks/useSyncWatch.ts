@@ -8,6 +8,8 @@ export interface SyncState {
   isPlaying: boolean;
   currentTime: number;
   timestamp: number;
+  sentAt?: number;
+  eventId?: string;
 }
 
 export interface QueueItem {
@@ -70,13 +72,69 @@ export function useSyncWatch({ roomId, nickname, avatar, isHost }: UseSyncWatchO
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [systemMessages, setSystemMessages] = useState<SystemMessage[]>([]);
   const [hostId, setHostId] = useState<string | null>(null);
-  const [playerReady, setPlayerReady] = useState(false);
+  const [playerReadyTick, setPlayerReadyTick] = useState(0);
   const [queue, setQueue] = useState<QueueItem[]>([]);
   const [connectionStatus, setConnectionStatus] = useState<SyncConnectionStatus>("idle");
 
   // Callback ref so the host can respond to REQUEST_SYNC
   const onSyncRequestRef = useRef<(() => void) | null>(null);
   const lastSyncRequestAtRef = useRef(0);
+  const lastAppliedSyncSentAtRef = useRef(0);
+  const lastAuthoritativeSwitchSentAtRef = useRef(0);
+  const latestVideoIdRef = useRef<string | null>(null);
+  const normalizeSyncState = useCallback((state: SyncState, fallbackSentAt: number): SyncState => {
+    const sentAt = state.sentAt ?? fallbackSentAt;
+    const eventId = state.eventId ?? `${state.videoId}:${sentAt}:${Math.random().toString(36).slice(2, 8)}`;
+    return {
+      ...state,
+      sentAt,
+      eventId,
+    };
+  }, []);
+
+  const applyIncomingSyncState = useCallback((
+    state: SyncState,
+    fallbackSentAt: number,
+    source: "sync" | "video_change" | "host_state"
+  ): boolean => {
+    const normalized = normalizeSyncState(state, fallbackSentAt);
+    const sentAt = normalized.sentAt ?? 0;
+
+    // Media switch lanes are authoritative and must not be blocked by plain sync packets.
+    if (source === "video_change" || source === "host_state") {
+      if (sentAt < lastAuthoritativeSwitchSentAtRef.current) {
+        return false;
+      }
+      lastAuthoritativeSwitchSentAtRef.current = sentAt;
+      latestVideoIdRef.current = normalized.videoId;
+      // Lift sync floor so older sync events from previous media are ignored.
+      if (sentAt > lastAppliedSyncSentAtRef.current) {
+        lastAppliedSyncSentAtRef.current = sentAt;
+      }
+      setSyncState(normalized);
+      return true;
+    }
+
+    // Only video_change (or explicit host snapshot) is allowed to switch media id.
+    // Plain sync packets should only adjust play/pause/time for the current media.
+    if (
+      source === "sync" &&
+      latestVideoIdRef.current &&
+      normalized.videoId !== latestVideoIdRef.current
+    ) {
+      return false;
+    }
+
+    if (sentAt < lastAppliedSyncSentAtRef.current) {
+      return false;
+    }
+
+    latestVideoIdRef.current = normalized.videoId;
+    lastAppliedSyncSentAtRef.current = sentAt;
+    setSyncState(normalized);
+    return true;
+  }, [normalizeSyncState]);
+
 
   const isHostRef = useRef(isHost);
   const guestControlRef = useRef(false);
@@ -136,10 +194,10 @@ export function useSyncWatch({ roomId, nickname, avatar, isHost }: UseSyncWatchO
 
   // Notify player ready — triggers sync request after YT player is initialized
   const notifyPlayerReady = useCallback(() => {
-    setPlayerReady(true);
+    setPlayerReadyTick((tick) => tick + 1);
   }, []);
 
-  const sendRequestSync = useCallback((cooldownMs = 800) => {
+  const sendRequestSync = useCallback((cooldownMs = 500) => {
     if (!channelRef.current) return;
     const now = Date.now();
     if (now - lastSyncRequestAtRef.current < cooldownMs) return;
@@ -153,10 +211,10 @@ export function useSyncWatch({ roomId, nickname, avatar, isHost }: UseSyncWatchO
 
   // When player becomes ready and we're not host, request sync again (for seek accuracy)
   useEffect(() => {
-    if (!playerReady || !channelRef.current) return;
+    if (playerReadyTick === 0 || !channelRef.current) return;
     if (amIHost) return;
     sendRequestSync(300);
-  }, [playerReady, amIHost, sendRequestSync]);
+  }, [playerReadyTick, amIHost, sendRequestSync]);
 
   useEffect(() => {
     if (!roomId || !nickname) return;
@@ -180,21 +238,39 @@ export function useSyncWatch({ roomId, nickname, avatar, isHost }: UseSyncWatchO
         const amCurrentHost = hostIdRef.current === peerId;
         if (!amCurrentHost || guestControlRef.current) {
           const state = payload as SyncState;
-          setSyncState(state);
-          showEvent(`${payload.from ?? "Host"} synced to ${formatTime(state.currentTime)}`);
+          const applied = applyIncomingSyncState(
+            state,
+            payload.sentAt ?? payload.timestamp ?? Date.now(),
+            "sync"
+          );
+          if (applied) {
+            showEvent(`${payload.from ?? "Host"} synced to ${formatTime(state.currentTime)}`);
+          }
         }
       })
       .on("broadcast", { event: "video_change" }, ({ payload }) => {
-        setSyncState(payload.state as SyncState);
-        showEvent(`${payload.from ?? "Host"} changed video`);
-        addSystemMessage(`${payload.from ?? "Host"} changed video`);
+        const applied = applyIncomingSyncState(
+          payload.state as SyncState,
+          payload.state?.sentAt ?? payload.state?.timestamp ?? Date.now(),
+          "video_change"
+        );
+        if (applied) {
+          showEvent(`${payload.from ?? "Host"} changed video`);
+          addSystemMessage(`${payload.from ?? "Host"} changed video`);
+        }
       })
       .on("broadcast", { event: "guest_control_toggle" }, ({ payload }) => {
         setGuestControlEnabled(payload.enabled);
         addSystemMessage(payload.enabled ? "Host enabled guest control" : "Host disabled guest control");
         if (!payload.enabled && payload.hostState) {
-          setSyncState(payload.hostState as SyncState);
-          showEvent("Re-syncing to Host...");
+          const applied = applyIncomingSyncState(
+            payload.hostState as SyncState,
+            payload.hostState?.sentAt ?? payload.hostState?.timestamp ?? Date.now(),
+            "host_state"
+          );
+          if (applied) {
+            showEvent("Re-syncing to Host...");
+          }
         }
       })
       .on("broadcast", { event: "host_transfer" }, ({ payload }) => {
@@ -334,16 +410,20 @@ export function useSyncWatch({ roomId, nickname, avatar, isHost }: UseSyncWatchO
 
   const broadcastSync = useCallback(
     (state: SyncState) => {
-      broadcast("sync", { ...state, from: nickname });
+      const sentAt = Date.now();
+      const payload = normalizeSyncState(state, sentAt);
+      broadcast("sync", { ...payload, from: nickname });
     },
-    [broadcast, nickname]
+    [broadcast, nickname, normalizeSyncState]
   );
 
   const broadcastVideoChange = useCallback(
     (state: SyncState) => {
-      broadcast("video_change", { state, from: nickname });
+      const sentAt = Date.now();
+      const payload = normalizeSyncState(state, sentAt);
+      broadcast("video_change", { state: payload, from: nickname });
     },
-    [broadcast, nickname]
+    [broadcast, nickname, normalizeSyncState]
   );
 
   const toggleGuestControl = useCallback(
@@ -371,7 +451,7 @@ export function useSyncWatch({ roomId, nickname, avatar, isHost }: UseSyncWatchO
   );
 
   const requestSync = useCallback(() => {
-    sendRequestSync(600);
+    sendRequestSync(350);
   }, [sendRequestSync]);
 
   const canControl = amIHost || guestControlEnabled;
@@ -441,9 +521,12 @@ export function useSyncWatch({ roomId, nickname, avatar, isHost }: UseSyncWatchO
     setChatMessages([]);
     setSystemMessages([]);
     setHostId(null);
-    setPlayerReady(false);
+    setPlayerReadyTick(0);
     setQueue([]);
     setConnectionStatus("idle");
+    lastAppliedSyncSentAtRef.current = 0;
+    lastAuthoritativeSwitchSentAtRef.current = 0;
+    latestVideoIdRef.current = null;
   }, []);
 
   return {
